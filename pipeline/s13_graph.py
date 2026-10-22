@@ -77,6 +77,8 @@ def main():
              for k, x, y, yr in zip(b.bag, c.x, c.y, b.year)}
     mons = {m["nr"]: m for m in json.load(open(f"{DATA}/raw/layers/monuments.json", encoding="utf-8"))}
     bags_of = {nr: [p for p in m["panden"] if p in where] for nr, m in mons.items()}
+    # a fact's source: the monument's record in the Linked Data Voorziening, else its entry in the register
+    ldv = lambda nr: mons[nr].get("cho") or REGISTER + nr
     addr = addresses({p for ps in bags_of.values() for p in ps})
     wiki = json.load(open(f"{WEB}/wiki.json", encoding="utf-8"))
     wk = pd.read_parquet(f"{DATA}/wiki_index.parquet").set_index("bag").wk
@@ -93,7 +95,7 @@ def main():
         roles_of[aid][en] += 1
         nodes.setdefault(aid, dict(id=aid, label=who, label_nl=who, roles_nl=Counter()))["roles_nl"][nl] += 1
         raw.append((aid, a["nr"], f"The monument register names {who} as {en}.",
-                    f"Het monumentenregister noemt {who} als {nl}.", REGISTER + a["nr"]))
+                    f"Het monumentenregister noemt {who} als {nl}.", ldv(a["nr"])))
     for aid, n in nodes.items():
         top = roles_of[aid].most_common(1)[0][0]
         n["type"] = "organisation" if top == "client" else "architect"
@@ -110,7 +112,7 @@ def main():
         sid = "style:" + "".join(ch for ch in style.lower() if ch.isalnum())
         nodes[sid] = dict(id=sid, type="event", label=style, label_nl=style, desc="style")
         raw += [(sid, nr, f"The monument register gives its style as {style}.",
-                 f"Het monumentenregister noemt als stijl {style}.", REGISTER + nr) for nr in nrs]
+                 f"Het monumentenregister noemt als stijl {style}.", ldv(nr)) for nr in nrs]
 
     # Complexes: monuments registered together, as one point linked to each of its monuments
     f = Path(f"{DATA}/raw/layers/complexes.json")
@@ -128,7 +130,7 @@ def main():
         nodes[xid] = dict(id=xid, type="person", label=name, label_nl=name,
                           desc="country estate" if c["estate"] else "complex", url=c["url"])
         raw += [(xid, nr, f"Part of the complex {name} in the monument register.",
-                 f"Onderdeel van het complex {name} in het monumentenregister.", c["url"]) for nr in nrs]
+                 f"Onderdeel van het complex {name} in het monumentenregister.", c["id"]) for nr in nrs]
 
     # Architects on Wikidata: a maker of the same name gets their full name, life and article; others join
     f = Path(f"{DATA}/raw/wd_architects.csv")
@@ -159,7 +161,7 @@ def main():
     links = {}
     for pid, nr, en, nl, src in raw:
         l = links.setdefault((pid, nr), dict(e=pid, p=f"p:rm-{nr}", texts=[]))
-        t = dict(text=en, text_nl=nl, source=src, via="Wikidata" if "wiki" in src else "Rijksmonumentenregister")
+        t = dict(text=en, text_nl=nl, source=src, via="Wikidata" if "wiki" in src else "Linked Data Voorziening")
         if t not in l["texts"]:
             l["texts"].append(t)
     # a point's years: a person's life where Wikidata gives it, else the span of the buildings it is linked to
