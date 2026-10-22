@@ -14,7 +14,7 @@ from urllib.parse import unquote
 
 import pandas as pd
 import requests
-from .city import DATA, UA, WEB
+from .city import CFG, DATA, LABEL, UA, WEB
 
 
 
@@ -155,6 +155,16 @@ def main():
                 continue
             named += 1
     print(named, "buildings named by the monument register")
+
+    # The city's own article, for the about text: its Wikipedia titles are the label unless the config names them.
+    titles = CFG.get("wikipedia", {"nl": LABEL, "en": LABEL})
+    about = {}
+    for lang, title in titles.items():
+        ex = extracts(lang, {title}).get(title)
+        if ex:
+            about[lang] = dict(extract=ex, url=f"https://{lang}.wikipedia.org/wiki/{title.replace(' ', '_')}")
+    Path(f"{WEB}/about.json").write_text(json.dumps(about, ensure_ascii=False), encoding="utf-8")
+    print("city article:", ", ".join(about) or "none")
     Path(f"{WEB}/wiki.json").write_text(json.dumps(entries, ensure_ascii=False, separators=(",", ":")))
     pd.DataFrame({"bag": list(index), "wk": list(index.values())}).to_parquet(f"{DATA}/wiki_index.parquet")
     print(len(entries), "entries for", len(index), "panden;", Path(f"{WEB}/wiki.json").stat().st_size // 1024, "KB")

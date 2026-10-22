@@ -12,6 +12,7 @@ Date sources, in order of trust:
              RCE year when it gives one, otherwise spread across its century or part of one
 """
 import csv
+import json
 import hashlib
 import geopandas as gpd
 import numpy as np
@@ -47,7 +48,10 @@ def apply_monuments(p: pd.DataFrame) -> pd.DataFrame:
     links = load_monuments()
     bag = p.identificatie.str.slice(-16)
     u = unit_hash(p.identificatie, "monument")
-    p["monument"] = bag.map(lambda b: links[b][2] if b in links else "")
+    # every pand of a monument carries its number, dated or not (the card shows the register's entry)
+    every = {q: str(m["nr"]) for m in json.load(open(f"{DATA}/raw/layers/monuments.json", encoding="utf-8"))
+             for q in m["panden"]}
+    p["monument"] = bag.map(lambda b: links[b][2] if b in links else every.get(b, ""))
     agree = disagree = 0
     for i in np.where(bag.isin(links))[0]:
         lo, hi, _ = links[bag.iat[i]]

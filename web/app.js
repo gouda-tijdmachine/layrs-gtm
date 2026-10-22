@@ -198,7 +198,11 @@ const tr = (o, k) => (LANG === 'nl' && o?.[k + '_nl']) || o?.[k];
 const fmtLocale = () => LANG === 'nl' ? 'nl-NL' : 'en';
 const periods = config.periods;
 for (const p of periods) if (p.label_nl) NL_UI[p.label] = p.label_nl;
-NL_UI['Protected townscapes'] = 'Beschermde gezichten';
+Object.assign(NL_UI, {
+  'Protected townscapes': 'Beschermde gezichten', 'From the register': 'Uit het register',
+  'Part of the complex': 'Onderdeel van het complex', 'Read the full entry': 'Lees de hele beschrijving in het register',
+  'RCE image bank': 'Beeldbank RCE', 'rights reserved': 'rechten voorbehouden', 'About the city': 'Over de stad',
+});
 document.querySelector('.masthead h1').childNodes[1].textContent = config.label;
 // The about text, written from the city's own numbers and sources.
 {
@@ -209,7 +213,7 @@ document.querySelector('.masthead h1').childNodes[1].textContent = config.label;
     <p class="notice">A test, built with the open pipeline of <a href="https://github.com/alexbarakov/amsterdam-by-building" target="_blank" rel="noopener">Amsterdam, building by building</a> by Alex Barakov, inspired by Sasha Bogachev's <a href="https://paris.bogachev.fr" target="_blank" rel="noopener">Paris, building by building</a>.</p>
     <h3>Data</h3><ul>
     <li>Buildings, heights, years: ${bv ? 'Kadaster 3D Basisvoorziening 2025 (height statistics per building, without roof shapes)' : '3D BAG (TU Delft), with LoD 2.2 roofs in the centre and for listed buildings'}, on the building register BAG. CC BY 4.0.</li>
-    <li>Monuments, styles, protected townscapes: national monument register (RCE), via its linked data and search index. CC0.</li>
+    <li>Monuments, styles, complexes, makers, protected townscapes: national monument register (RCE), via its linked data and search index. CC0. Photos from the RCE image bank, mostly CC BY 4.0.</li>
     <li>Water, boundary, addresses: BGT, BAG and Bestuurlijke Gebieden via PDOK; street names: Nationaal Wegenbestand. CC0.</li>
     <li>Energy labels: RVO via RIVM Atlas Leefomgeving. Public domain.</li>
     <li>Names, photos: Wikidata, Wikipedia, Wikimedia Commons; each photo credits its author and licence.</li></ul>
@@ -219,11 +223,22 @@ document.querySelector('.masthead h1').childNodes[1].textContent = config.label;
     <p class="notice">Een test, gebouwd met de open pijplijn van <a href="https://github.com/alexbarakov/amsterdam-by-building" target="_blank" rel="noopener">Amsterdam, building by building</a> van Alex Barakov, geïnspireerd door <a href="https://paris.bogachev.fr" target="_blank" rel="noopener">Paris, building by building</a> van Sasha Bogachev.</p>
     <h3>Gegevens</h3><ul>
     <li>Gebouwen, hoogtes, bouwjaren: ${bv ? '3D Basisvoorziening 2025 van het Kadaster (hoogtestatistieken per gebouw, zonder dakvormen)' : '3D BAG (TU Delft), met de daken uit LoD 2.2 in het centrum en voor monumenten'}, op basis van de BAG. CC BY 4.0.</li>
-    <li>Monumenten, stijlen, beschermde gezichten: rijksmonumentenregister (RCE), via de linked data en de zoekindex. CC0.</li>
+    <li>Monumenten, stijlen, complexen, makers, beschermde gezichten: rijksmonumentenregister (RCE), via de linked data en de zoekindex. CC0. Foto's uit de beeldbank van de RCE, meestal CC BY 4.0.</li>
     <li>Water, grens, adressen: BGT, BAG en Bestuurlijke Gebieden via PDOK; straatnamen: Nationaal Wegenbestand. CC0.</li>
     <li>Energielabels: RVO via de Atlas Leefomgeving van het RIVM. Publiek domein.</li>
     <li>Namen, foto's: Wikidata, Wikipedia, Wikimedia Commons; bij elke foto staan maker en licentie.</li></ul>
     <h3>Methode</h3><p>Afgeronde jaartallen in de BAG zijn gespreid over hun afrondingsstap; waar het monumentenregister een gebouw eerder dateert, wint het register. Geschatte jaren zijn lichter en gemarkeerd met “c.”.</p>`;
+  // the city's own Wikipedia article (pipeline/s06_wiki.py), after the first lines
+  fetch(D + 'about.json').then(r => r.json()).then(a => {
+    // its own escaping: this can run before the card code further down has defined esc()
+    const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+    for (const [lang, el, more] of [['en', en, 'Read more on Wikipedia'], ['nl', nl, 'Lees verder op Wikipedia']]) {
+      const w = a[lang] || a.nl || a.en;
+      if (!w) continue;
+      el.querySelector('h2').nextElementSibling.insertAdjacentHTML('afterend', `<h3>${lang === 'nl' ? 'Over de stad' : 'About the city'}</h3>
+        <p lang="${a[lang] ? lang : 'nl'}">${esc(w.extract)} <a href="${esc(w.url)}" target="_blank" rel="noopener">${more}</a></p>`);
+    }
+  }).catch(() => {});
 }
 
 // ---------- Scene ----------
@@ -717,6 +732,18 @@ function addressOf(gid, then) {
   }
   return addrShards[k]?.[gid % 4096] || null;
 }
+// The register's entry per monument (pipeline/s16_register.py): text, complex, photos from the RCE image bank.
+const regShards = {};
+function registerOf(nr, then) {
+  const k = nr % 16;
+  if (regShards[k] === undefined) {
+    regShards[k] = null;
+    fetch(`${D}register/${k}.json`).then(r => r.json()).then(d => { regShards[k] = d; then(); }).catch(() => {});
+  }
+  return regShards[k]?.[nr] || null;
+}
+const RIGHTS = [[/publicdomain\/zero/, 'CC0'], [/by-sa\/4\.0/, 'CC BY-SA 4.0'], [/by\/4\.0/, 'CC BY 4.0'], [/by-sa/, 'CC BY-SA'], [/\/by\//, 'CC BY']];
+const rightsOf = url => (RIGHTS.find(([re]) => re.test(url || '')) || [0, t('rights reserved')])[1];
 function inkOn(hex) {
   const c = [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16) / 255).map(v => v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4);
   return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2] > 0.3 ? '#000' : '#fff';
@@ -741,10 +768,15 @@ function cardHeadHtml(b, w, period) {
 }
 
 let slides = [], slide = 0;
-function photosHtml(b, im, credit, pinned) {
-  slides = im ? [{ src: im.thumb, label: t('Today'), credit: `${t('Photo')}: ${credit}` }] : [];
+function photosHtml(b, im, credit, pinned, reg) {
+  // the register's photos (RCE image bank) first, today's photo from Wikimedia last; the card opens on today
+  const rce = (reg?.photos || []).map((p, i) => ({
+    src: p.src, label: `RCE ${i + 1}`, page: p.page,
+    credit: `${p.desc ? esc(p.desc) + ', ' : ''}${pinned && p.page ? link(p.page, t('RCE image bank')) : t('RCE image bank')}, ${esc(rightsOf(p.rights))}`,
+  }));
+  slides = [...rce, ...(im ? [{ src: im.thumb, label: t('Today'), credit: `${t('Photo')}: ${credit}` }] : [])];
   if (!slides.length) return '';
-  slide = slides.length - 1;
+  slide = im ? slides.length - 1 : 0;
   const s = slides[slide], more = '';
   return `<figure class="photo${s.sv ? ' sv' : ''}"><div class="frame">${s.sv ? `<img data-sv="${esc(s.sv)}" alt="">` : `<img src="${esc(s.src)}" alt="">`}
     ${pinned && slides.length > 1 ? `<button class="prev" aria-label="${t('Earlier')}">‹</button><button class="next" aria-label="${t('Later')}">›</button>` : ''}
@@ -825,12 +857,17 @@ function cardHtml(gid, pinned) {
     return `<li><i style="background:${groupColor(g)}"></i><div><b>${esc(tr(g.layer, 'title'))}</b> <span>${esc(tr(g, 'label'))}</span>
       ${pinned && note ? `<p>${esc(tr(note, 'story'))}${note.source ? ` ${link(note.source, t('Source'))}` : ''}</p>` : ''}</div></li>`;
   }).join('');
+  const reg = b.mon ? registerOf(b.mon, () => refreshCard(gid)) : null;
+  const regHtml = pinned && reg?.text ? `<section class="register"><h4>${t('From the register')}</h4>
+      ${reg.complex ? `<p class="why">${t('Part of the complex')} ${link(reg.complex.url, reg.complex.name || '')}</p>` : ''}
+      <p class="extract" lang="nl">${esc(reg.text)}</p><p>${link(reg.url, t('Read the full entry'))}</p></section>` : '';
   const dating = b.orig !== b.year ? `${t(DATE_NOTE[b.flag] || '')} ${t('BAG gives')} ${b.orig}.` : (DATE_NOTE[b.flag] && t(DATE_NOTE[b.flag]));
   return `
     ${pinned ? '<button class="card-close" aria-label="Close">×</button>' : ''}
-    ${photosHtml(b, im, credit, pinned)}
+    ${photosHtml(b, im, credit, pinned, reg)}
     ${cardHeadHtml(b, w, period)}
     ${pinned && wikiOf(w)?.extract ? `<section><p class="extract">${esc(wikiOf(w).extract)}</p></section>` : ''}
+    ${regHtml}
     ${didYouKnow[b.bag] ? `<section class="fact"><h4>${t('Did you know')}</h4><p>${esc(LANG === 'nl' ? didYouKnow[b.bag].nl : didYouKnow[b.bag].en)}${pinned ? ` ${link(didYouKnow[b.bag].source, t('Source'))}` : ''}</p></section>` : ''}
     ${residentsHtml(b, pinned)}
     ${inLayers ? `<section><h4>${t('In layers')}</h4><ul class="chips">${inLayers}</ul></section>` : ''}

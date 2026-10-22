@@ -69,6 +69,40 @@ def by_monument(keyed: dict[str, str]) -> dict[str, str]:
     return {p: g for nr, g in keyed.items() for p in mp.get(str(nr), ())}
 
 
+@cache
+def addresses() -> dict[str, str]:
+    """The main address of each pand: the lowest number on the street with most of its addresses."""
+    per = {}
+    for a in json.load(open(f"{DATA}/raw/addresses.json", encoding="utf-8")):
+        if a["pandidentificatie"] and a["openbare_ruimte"]:
+            per.setdefault(a["pandidentificatie"], []).append((a["openbare_ruimte"], a["huisnummer"], a["huisletter"] or ""))
+    out = {}
+    for bag, addrs in per.items():
+        street = max({s for s, _, _ in addrs}, key=lambda st: sum(s == st for s, _, _ in addrs))
+        n, letter = min((n, l) for s, n, l in addrs if s == street)
+        out[bag] = f"{street} {n}{letter}"
+    return out
+
+
+def short(txt: str, limit: int = 200) -> str:
+    """The register's description cut to its first sentence, without the heading the newer entries start with."""
+    t = re.sub(r"^(Inleiding|Omschrijving( van het complex)?|Beschrijving)\s+", "", txt or "").strip()
+    # sentences end at a full stop after a word, not after an abbreviation (St., Ned., ca., plm.)
+    parts = re.split(r"(?<!\bSt)(?<!\bNed)(?<!\bca)(?<!\bplm)(?<=[a-z0-9)])\.\s", t, maxsplit=2)
+    first = parts[0].rstrip(".")
+    if len(first) < 40 and len(parts) > 1:  # "O.L.Vrouwetoren." alone says little: take the next sentence too
+        first = f"{first}. {parts[1].rstrip('.')}"
+    if len(first) > limit:
+        first = first[:limit].rsplit(" ", 1)[0].rstrip(",;:") + "…"
+    return first + ("" if first.endswith("…") else ".")
+
+
+def story(name: str, txt: str, url: str) -> dict:
+    """A note for the walks and the card: the place's name and a line from the register, in Dutch either way."""
+    line = short(txt)
+    return {"name": name, "name_nl": name, "story": line, "story_nl": line, "source": url}
+
+
 def within(polygons: gpd.GeoDataFrame, key_col: str) -> dict[str, str]:
     """Buildings whose centroid falls inside a polygon, keyed by the polygon's group."""
     b = buildings()
@@ -106,13 +140,18 @@ FUNCTIONS = [
     groups=[(k, label, nl) for k, label, nl, _ in FUNCTIONS],
 )
 def register():
-    keyed = {}
+    # every monument with its group, and the register's own words as its story: the stops of a walk
+    out, addr = {}, addresses()
     for m in monuments():
         f = (m.get("function") or "").lower()
         k = next((k for k, _, _, pat in FUNCTIONS if re.search(pat, f)), None)
-        if k:
-            keyed[str(m["nr"])] = k
-    return by_monument(keyed)
+        if not k:
+            continue
+        url = f"https://monumentenregister.cultureelerfgoed.nl/monumenten/{m['nr']}"
+        for p in m["panden"]:
+            name = m.get("name") or addr.get(p) or f"Rijksmonument {m['nr']}"
+            out[p] = (k, story(name, m.get("txt"), url)) if m.get("txt") else k
+    return out
 
 
 @layer(
@@ -179,6 +218,36 @@ def styles():
         if g:
             keyed.setdefault(r["nr"], g)
     return by_monument(keyed)
+
+
+@cache
+def complexes() -> dict[str, dict]:
+    f = Path(f"{RAW}/complexes.json")
+    return {c["id"]: c for c in json.load(open(f, encoding="utf-8"))} if f.exists() else {}
+
+
+@layer(
+    id="complexes", section="Architecture", section_nl="Architectuur",
+    title="Complexes", title_nl="Complexen", era="All periods", era_nl="Alle perioden",
+    text=("Some monuments were listed together, because they only make sense as a whole: a convent with its school "
+          "and garden, a country house with its coach house, gardener's house and park, a housing block."),
+    text_nl=("Sommige monumenten zijn samen beschermd, omdat ze alleen als geheel te begrijpen zijn: een klooster met "
+             "school en tuin, een buitenplaats met koetshuis, tuinmanswoning en park, een woonblok."),
+    caveat="Each complex shows as one stop on a walk, with the register's description of the whole.",
+    caveat_nl="Elk complex is één stop op een wandeling, met de omschrijving van het geheel uit het register.",
+    source=("Rijksmonumentenregister, RCE: complexen", "https://monumentenregister.cultureelerfgoed.nl"),
+    groups=[("estate", "Country estates", "Buitenplaatsen"), ("complex", "Other complexes", "Overige complexen")],
+)
+def complexes_layer():
+    out, cx = {}, complexes()
+    for m in monuments():
+        c = cx.get(m.get("complex"))
+        if not c:
+            continue
+        note = story(c["name"] or f"Complex {c['nr']}", c["txt"], c["url"])
+        for p in m["panden"]:
+            out[p] = ("estate" if c["estate"] else "complex", note)
+    return out
 
 
 def _townscapes() -> gpd.GeoDataFrame:

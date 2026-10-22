@@ -26,16 +26,17 @@ main streets to label from afar, and the pipeline steps. The pipeline reads and 
 | `s00_fetch_3dbag`, `s00_fetch_3dbv` | 3D BAG (TU Delft), or else Kadaster's 3D Basisvoorziening | buildings, heights, years; the fallback has no roof shapes |
 | `s00_fetch_water`, `s00_fetch_addresses` | BGT and BAG via PDOK | water, every address with its building |
 | `s00_fetch_energy` | RVO via RIVM Atlas Leefomgeving | energy labels |
-| `s00_fetch_rce` ([`rce.py`](pipeline/rce.py)) | RCE monument register: its Elastic projection ([elastic-ceo](https://github.com/jolietjakeblues/elastic-ceo)), then SPARQL | monuments on their BAG panden, descriptions, styles, building years, makers and clients, protected townscapes |
-| `s00_fetch_wikidata` | Wikidata | names, articles, photos per BAG pand |
+| `s00_fetch_rce` ([`rce.py`](pipeline/rce.py)) | RCE monument register: its Elastic projection ([elastic-ceo](https://github.com/jolietjakeblues/elastic-ceo)), then SPARQL | monuments on their BAG panden, descriptions, styles, building years, makers and clients, complexes, photos from the RCE image bank, protected townscapes |
+| `s00_fetch_wikidata` | Wikidata | names, articles, photos and architects, by BAG pand id and by monument number |
 | `s01_load`, `s02_attributes` | | buildings and parts; years cleaned: placeholders, rounded years, the register's earlier dates |
 | `s01c_roofs`, `s01d_spires` | 3D BAG LoD 2.2, AHN | roofs, towers and spires (3D BAG only) |
-| `s05_layers` ([`layers.py`](pipeline/layers.py)) | | the context layers: monuments by function, gables, styles, protected townscapes, protected heritage |
+| `s05_layers` ([`layers.py`](pipeline/layers.py)) | | the context layers: monuments by function (each with a line from the register, the stops of a walk), gables, styles, complexes, protected townscapes, protected heritage |
 | `s07_labels` | Nationaal Wegenbestand | street names along their streets |
-| `s10_commons`, `s06_wiki` | Wikimedia Commons, Wikipedia | photos (also by address or monument number in the file name) and article extracts |
+| `s10_commons`, `s06_wiki` | Wikimedia Commons, Wikipedia | photos (also by address or monument number in the file name), article extracts, the city's own article |
 | `s03_tiles`, `s04_water` | | 600 m tiles in 8 packs, per-building attributes, water and land |
-| `s13_graph` | | makers, clients and styles of the monuments, linked to their buildings |
+| `s13_graph` | | makers, clients, complexes and styles of the monuments, linked to their buildings; architects with their Wikipedia article |
 | `s14_search`, `s15_addresses` | | search index, an address per building |
+| `s16_register` | | the register's entry per monument for the building card: text, complex, RCE photos |
 
 ## Run it
 
