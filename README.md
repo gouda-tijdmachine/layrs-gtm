@@ -5,6 +5,7 @@ history, from national open data only. Live:
 
 - Amersfoort: https://layrs-amersfoort.pages.dev
 - Maastricht: https://layrs-maastricht.pages.dev
+- Dordrecht: https://layrs-dordrecht.pages.dev
 
 A non-commercial test. It grew out of Alex Barakov's
 [Amsterdam, building by building](https://github.com/alexbarakov/amsterdam-by-building) (MIT), itself inspired by
