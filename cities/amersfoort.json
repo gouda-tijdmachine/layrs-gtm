@@ -22,14 +22,12 @@
     ["p9", "1995–2009 Nieuwland, Vathorst", "1995–2009 Nieuwland, Vathorst", 1995, 2009, "#3a4f9a"],
     ["p10", "2010–today", "2010–nu", 2010, 2100, "#6a3f8f"]
   ],
-  "layers": ["rce"],
   "tier1": ["Langestraat", "Utrechtseweg", "Stadsring", "Kamp", "Hof", "Lieve Vrouwekerkhof", "Varkensmarkt",
             "Krommestraat", "Muurhuizen", "Zuidsingel", "Westsingel", "Stationsstraat", "Leusderweg", "Arnhemseweg",
             "Hogeweg", "Soesterweg", "Kapelweg", "Van Randwijcklaan", "Hooglandseweg", "Amsterdamseweg",
             "Barchman Wuytierslaan", "Smallepad", "'t Zand", "Kleine Spui", "Weverssingel", "Puntenburgerlaan",
             "Daam Fockemalaan", "Neptunusweg", "Vathorsterweg", "Nijkerkerstraat"],
-  "features": {"panorama": false, "archive": false, "graph": true, "quests": false},
   "steps": ["s00_fetch_boundary", "s00_fetch_3dbag", "s00_fetch_3dbv", "s00_fetch_water", "s00_fetch_addresses", "s00_fetch_energy",
             "s00_fetch_rce", "s00_fetch_wikidata", "s01_load", "s02_attributes", "s01c_roofs", "s01d_spires",
-            "s05_layers", "s06_wiki", "s03_tiles", "s04_water", "s07_labels", "s13_graph_rce", "s14_search", "s15_addresses"]
+            "s05_layers", "s07_labels", "s10_commons", "s06_wiki", "s03_tiles", "s04_water", "s13_graph", "s14_search", "s15_addresses"]
 }

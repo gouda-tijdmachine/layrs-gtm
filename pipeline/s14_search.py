@@ -2,7 +2,7 @@
 
 index.json, loaded on the first use of the search box:
   streets: [name, buildings] for every street (BAG openbare ruimte) with at least one address on a building.
-  names: [label, label_nl or null, gid, kind] for named buildings (Wikidata, curated stories) and well-known residents.
+  names: [label, label_nl or null, gid, kind] for named buildings (Wikidata, the monument register).
 {key}.json, one shard per first character of the normalised street name, loaded when a street is chosen or a house
   number typed: {street: [[number, gid], ...]}, numbers in order, each pointing at its building.
 gid is the building's row in data/buildings.parquet, the order of the tiles and attrs.bin.
@@ -70,13 +70,6 @@ def main():
     for k, bg in first.items():
         w = wiki[k] or {}
         add(w.get("label"), w.get("label_nl"), gid.get(bg), "building")
-    # curated stories and residents exist where s08_curated and s09_residents ran (Amsterdam)
-    curated, residents = Path(f"{DATA}/curated.json"), Path(f"{DATA}/residents.json")
-    for L in json.load(open(curated)) if curated.exists() else []:
-        for e in L["entries"]:
-            add(e["name"], e.get("name_nl"), gid.get(e["bag"]), "building")
-    for r in json.load(open(residents)) if residents.exists() else []:
-        add(r["person"], None, gid.get(r["bag"]), "person")
     # monuments the register names (s00_fetch_rce), on their first pand
     monuments = Path(f"{DATA}/raw/layers/monuments.json")
     for m in json.load(open(monuments)) if monuments.exists() else []:

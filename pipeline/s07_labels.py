@@ -1,12 +1,9 @@
-"""Street and canal names, placed along their own outlines.
+"""Street names, placed along their own streets.
 
-Source: BAG openbare ruimtes from the Amsterdam city API (polygon per street, CC0). Each polygon is cut
-into 300 m cells; every piece longer than it is wide gets one label at its centre, turned along its
-long side. Tier 1 (canals and main streets) shows from afar, tier 2 only up close.
-
-Other cities have no such polygons in open data: there the streets come from the Nationaal Wegenbestand
-(Rijkswaterstaat via PDOK, CC0), whose road segments carry the BAG street name; each street's centre lines,
-buffered to a street's width, take the place of its polygon. Their tier 1 is the config's "tier1" list.
+Source: the Nationaal Wegenbestand (Rijkswaterstaat via PDOK, CC0), whose road segments carry the BAG street name.
+Each street's centre lines, buffered to a street's width, make one polygon per name; it is cut into 300 m cells, and
+every piece longer than it is wide gets one label at its centre, turned along its long side. Tier 1 (the main streets,
+the config's "tier1" list) shows from afar, tier 2 only up close.
 """
 import json
 import math
@@ -17,48 +14,15 @@ import requests
 import shapely
 from shapely.geometry import box, shape
 
-from .s03_tiles import ORIGIN
 from concurrent.futures import ThreadPoolExecutor
 
 from .city import CFG, DATA, GEMEENTE_CODE, WEB, bounds
+from .s03_tiles import ORIGIN
 
-API = "https://api.data.amsterdam.nl/v1/bag/openbareruimtes/"
 NWB = "https://api.pdok.nl/rws/nationaal-wegenbestand-wegen/ogc/v1/collections/wegvakken/items"
 RD = "http://www.opengis.net/def/crs/EPSG/0/28992"
 STREET_HALF_WIDTH = 6.0
 CELL = 300.0
-TIER1 = {
-    # canals and rivers
-    "Singel", "Herengracht", "Keizersgracht", "Prinsengracht", "Singelgracht", "Amstel", "Brouwersgracht",
-    "Lijnbaansgracht", "Bloemgracht", "Egelantiersgracht", "Leidsegracht", "Reguliersgracht", "Lauriergracht",
-    "Oudezijds Voorburgwal", "Oudezijds Achterburgwal", "Kloveniersburgwal", "Geldersekade", "Groenburgwal",
-    "Nieuwe Herengracht", "Nieuwe Keizersgracht", "Nieuwe Prinsengracht", "Entrepotdok", "Oosterdok",
-    "Westerdok", "Amstelkanaal", "Noordhollandsch Kanaal", "Kostverlorenvaart", "Boerenwetering",
-    "Het IJ", "IJ", "Nieuwe Meer", "Sloterplas", "Rapenburgwal", "Houtkopersburgwal", "Looiersgracht",
-    # main streets and squares
-    "Damrak", "Rokin", "Kalverstraat", "Nieuwendijk", "Dam", "Leidsestraat", "Utrechtsestraat", "Vijzelstraat",
-    "Weesperstraat", "Wibautstraat", "Overtoom", "Ferdinand Bolstraat", "Van Baerlestraat", "Stadhouderskade",
-    "Nassaukade", "Marnixstraat", "Rozengracht", "Raadhuisstraat", "Haarlemmerstraat", "Haarlemmerdijk",
-    "Jodenbreestraat", "Plantage Middenlaan", "Sarphatistraat", "Ceintuurbaan", "Albert Cuypstraat",
-    "De Clercqstraat", "Kinkerstraat", "Prins Hendrikkade", "Zeedijk", "Warmoesstraat", "Spui", "Rembrandtplein",
-    "Leidseplein", "Museumplein", "Beethovenstraat", "Apollolaan", "Amstelveenseweg", "IJburglaan",
-    "Van Woustraat", "Linnaeusstraat", "Middenweg", "Admiraal de Ruijterweg", "Jan Evertsenstraat",
-    "Bos en Lommerweg", "Klaprozenweg", "Johan Huizingalaan", "Europaboulevard", "Bijlmerdreef",
-    "Mr. Visserplein", "Waterlooplein", "Frederiksplein", "Weteringschans", "Mauritskade", "Hobbemakade",
-}
-
-
-def fetch():
-    items, url, params = [], API, {"_format": "json", "_pageSize": 1000}
-    while url:
-        d = requests.get(url, params=params, timeout=120).json()
-        items += d["_embedded"]["openbareruimtes"]
-        url = d["_links"].get("next", {}).get("href")
-        params = None
-    return [o for o in items if o.get("geometrie") and not o.get("eindGeldigheid")
-            and o["typeOmschrijving"] in ("Weg", "Water")]
-
-
 def nwb_cell(x, y):
     url, params, out = NWB, {"f": "json", "limit": 1000, "bbox": f"{x},{y},{x + 1000},{y + 1000}", "bbox-crs": RD,
                              "crs": RD}, []
@@ -71,7 +35,7 @@ def nwb_cell(x, y):
 
 
 def fetch_nwb():
-    """Streets as the Amsterdam API gives them, one polygon per name: the NWB segments of the name, buffered."""
+    """One polygon per street name: the NWB segments of the name, buffered."""
     x0, y0, x1, y1 = bounds()
     with ThreadPoolExecutor(8) as ex:
         parts = list(ex.map(lambda c: nwb_cell(*c), [(x, y) for x in range(x0, x1, 1000) for y in range(y0, y1, 1000)]))
@@ -113,10 +77,10 @@ def placement(p):
 
 
 def main():
-    raw = Path(f"{DATA}/raw/openbareruimtes.json")
+    raw = Path(f"{DATA}/raw/streets.json")
     if not raw.exists():
-        raw.write_text(json.dumps(fetch() if "amsterdam" in CFG["layers"] else fetch_nwb()))
-    tier1 = TIER1 if "amsterdam" in CFG["layers"] else set(CFG.get("tier1", ()))
+        raw.write_text(json.dumps(fetch_nwb()))
+    tier1 = set(CFG.get("tier1", ()))
     items = json.loads(raw.read_text())
     labels = []
     for o in items:
@@ -127,7 +91,7 @@ def main():
         name = o["naam"]
         labels.append(dict(name=name, water=o["typeOmschrijving"] == "Water",
                            tier=1 if name in tier1 else 2, pts=pts, origin=o.get("beschrijvingNaam")))
-    # One entry per name: a canal is registered both as water and as the street along it; keep the water.
+    # One entry per name
     merged = {}
     for l in sorted(labels, key=lambda l: not l["water"]):
         m = merged.setdefault(l["name"], dict(l, pts=[]))

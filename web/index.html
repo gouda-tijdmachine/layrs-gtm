@@ -3,19 +3,12 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>LAYRS: Amsterdam</title>
-<meta name="description" content="All 192,000 buildings of Amsterdam in 3D, coloured by the year they were built, with context layers: who lived here, Jewish Amsterdam, street art, the war, secrets of the city. Every story with its source.">
-<link rel="canonical" href="https://stop-token.com/lab/amsterdam/">
+<title>LAYRS</title>
+<meta name="description" content="A Dutch city building by building, coloured by the year each was built, with layers from the national monument register.">
 <meta property="og:type" content="website">
-<meta property="og:title" content="LAYRS: Amsterdam">
-<meta property="og:description" content="All 192,000 buildings of Amsterdam in 3D, coloured by the year they were built, with context layers: who lived here, Jewish Amsterdam, street art, the war, secrets of the city. Every story with its source.">
-<meta property="og:url" content="https://stop-token.com/lab/amsterdam/">
-<meta property="og:image" content="https://stop-token.com/lab/amsterdam/og.png">
-<meta property="og:image:width" content="1200">
-<meta property="og:image:height" content="630">
+<meta property="og:title" content="LAYRS">
+<meta property="og:description" content="A Dutch city building by building, coloured by the year each was built.">
 <meta name="twitter:card" content="summary_large_image">
-<link rel="alternate" type="text/csv" title="Buildings of Amsterdam by construction year (CSV)" href="data/buildings.csv">
-<script type="application/ld+json">{"@context": "https://schema.org", "@graph": [{"@type": "WebApplication", "name": "LAYRS: Amsterdam", "url": "https://stop-token.com/lab/amsterdam/", "description": "All 192,000 buildings of Amsterdam in 3D, coloured by the year they were built, with context layers: who lived here, Jewish Amsterdam, street art, the war, secrets of the city. Every story with its source.", "inLanguage": "en", "applicationCategory": "ReferenceApplication", "operatingSystem": "Any (web browser with WebGL)", "isAccessibleForFree": true, "image": "https://stop-token.com/lab/amsterdam/og.png", "about": {"@type": "City", "name": "Amsterdam"}, "author": {"@type": "Person", "name": "Alex Barakov", "url": "https://www.linkedin.com/in/alexanderbarakov"}, "isBasedOn": {"@type": "CreativeWork", "name": "Paris, building by building", "url": "https://paris.bogachev.fr/", "author": {"@type": "Person", "name": "Alexander Bogachev"}}}, {"@type": "Dataset", "name": "Buildings of Amsterdam by construction year", "description": "All 192,000 buildings of Amsterdam in 3D, coloured by the year they were built, with context layers: who lived here, Jewish Amsterdam, street art, the war, secrets of the city. Every story with its source.", "url": "https://stop-token.com/lab/amsterdam/explore/", "spatialCoverage": {"@type": "Place", "name": "Amsterdam"}, "creator": {"@type": "Person", "name": "Alex Barakov"}, "isAccessibleForFree": true, "distribution": [{"@type": "DataDownload", "encodingFormat": "text/csv", "contentUrl": "https://stop-token.com/lab/amsterdam/data/buildings.csv"}, {"@type": "DataDownload", "encodingFormat": "application/json", "contentUrl": "https://stop-token.com/lab/amsterdam/data/layers.json"}]}]}</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@400;500;700;800&display=swap" rel="stylesheet">
@@ -23,15 +16,15 @@
 <script src="logo.js" defer></script>
 </head>
 <body>
-<noscript><p style="padding:24px;font:16px sans-serif">This map needs JavaScript. The same buildings and stories as plain pages: <a href="explore/">Explore Amsterdam as pages</a></p></noscript>
-<canvas id="scene" aria-label="3D map of Amsterdam's buildings"></canvas>
+<noscript><p style="padding:24px;font:16px sans-serif">This map needs JavaScript.</p></noscript>
+<canvas id="scene" aria-label="3D map of the city's buildings"></canvas>
 <div class="veil veil-top" aria-hidden="true"></div>
 <div class="veil veil-bottom" aria-hidden="true"></div>
 
 <header class="masthead">
   
   <div>
-    <h1><span class="layrs" aria-label="LAYRS">LAYRS</span>Amsterdam<i class="baseline"></i></h1>
+    <h1><span class="layrs" aria-label="LAYRS">LAYRS</span> <i class="baseline"></i></h1>
     <p class="dek">Every building standing today, by age and historical context.</p>
   </div>
 </header>
@@ -49,7 +42,6 @@
   <a class="graph-open" href="graph.html"><span>Graph</span></a>
   <span class="modes-sep" aria-hidden="true"></span>
   <button class="walks-open" aria-haspopup="dialog"><span>Walk</span></button>
-  <button class="quests-open" aria-haspopup="dialog"><span>Quests</span></button>
 </nav>
 
 <div class="lang" role="group" aria-label="Language">
@@ -59,78 +51,8 @@
 
 <dialog id="about" class="about" aria-labelledby="about-title">
   <button class="about-close" aria-label="Close">×</button>
-  <article lang="en" data-lang-block="en">
-    <h2 id="about-title">About this map</h2>
-    <p>All 192,000 buildings of Amsterdam, coloured by the year they were built and set in the history that shaped them.</p>
-    <p class="notice">A non-commercial project, made out of curiosity and for education.</p>
-    <p class="author">Made by <a href="https://www.linkedin.com/in/alexanderbarakov" target="_blank" rel="noopener">Alex Barakov</a>.</p>
-    <p class="credit">Inspired by Sasha Bogachev and his <a href="https://paris.bogachev.fr" target="_blank" rel="noopener">Paris, building by building</a>.</p>
-    <h3>LAYRS projects</h3>
-    <p>LAYRS maps cities building by building: each one with its age and the layers of history it belongs to.</p>
-    <ul>
-      <li><a href="/lab/amsterdam/">LAYRS: Amsterdam</a>, you are here.</li>
-      <li><a href="/lab/delft/">LAYRS: Delft</a>: 37,000 buildings of Delft, from Vermeer's street to the 1654 gunpowder blast.</li>
-      <li><a href="/lab/london/">LAYRS: London</a>: 213,000 buildings of inner London, from the Great Fire to the new skyline.</li>
-      <li><a href="/ru/lab/spb/">LAYRS: St. Petersburg</a>: 107,000 buildings of St. Petersburg, from Pushkin's flats to the 1941 air-raid reports (in Russian).</li>
-    </ul>
-    <h3>Open source</h3>
-    <p>The code and the pipeline are on <a href="https://github.com/alexbarakov/amsterdam-by-building" target="_blank" rel="noopener">GitHub</a>. Know a piece of Amsterdam's history
-    that lives in its buildings? <a href="https://github.com/alexbarakov/amsterdam-by-building/blob/main/CONTRIBUTING.md" target="_blank" rel="noopener">Add it as a layer</a>:
-    a list of addresses, a short story for each and the Wikipedia article it rests on.</p>
-    <h3>Data</h3>
-    <p>Downloaded on 12 October 2026; street photos load live.</p>
-    <ul>
-      <li>Buildings, roofs, heights, years: 3D BAG v2025.09.03 (TU Delft), its LoD 2.2 roofs in the centre and for listed buildings, on the Dutch building register BAG. CC BY 4.0.</li>
-      <li>Towers and spires the model leaves out: AHN surface model, 0.5 m, via PDOK. CC0.</li>
-      <li>Water, boundary, streets: BGT and BAG via PDOK and the City of Amsterdam. CC0.</li>
-      <li>Monuments, history layers: national monument register (RCE) and City of Amsterdam open data. CC0 or CC BY.</li>
-      <li>Energy labels: RVO via RIVM Atlas Leefomgeving. Public domain.</li>
-      <li>Names, photos, stories: Wikidata, Wikipedia, Wikimedia Commons; each photo credits its author and licence.</li>
-      <li>Street photos: City of Amsterdam panoramas. CC BY 4.0.</li>
-      <li>Archive photos, 1940s–2010s: Stadsarchief Amsterdam beeldbank, linked to buildings by the Amsterdam Time Machine (University of Amsterdam). Shown from the archive's own server; each links to its record, where the rights are stated.</li>
-    </ul>
-    <p class="pages">Also as plain pages, for reading and for search engines: <a href="explore/">Amsterdam, building by building</a>.</p>
-    <h3>Method</h3>
-    <p>Placeholder and rounded years in BAG are estimated from dated neighbours; where the monument register dates a building
-    earlier, the register wins. Approximate years are paler and marked “c.”. Every hand-written story is checked against its
-    Wikipedia article; the residents layer is found automatically and may contain errors.</p>
-  </article>
-  <article lang="nl" data-lang-block="nl" hidden>
-    <h2>Over deze kaart</h2>
-    <p>Alle 192.000 gebouwen van Amsterdam, gekleurd naar hun bouwjaar en geplaatst in de geschiedenis die ze vormde.</p>
-    <p class="notice">Een niet-commercieel project, gemaakt uit nieuwsgierigheid en voor onderwijs.</p>
-    <p class="author">Gemaakt door <a href="https://www.linkedin.com/in/alexanderbarakov" target="_blank" rel="noopener">Alex Barakov</a>.</p>
-    <p class="credit">Geïnspireerd door Sasha Bogachev en zijn <a href="https://paris.bogachev.fr" target="_blank" rel="noopener">Paris, building by building</a>.</p>
-    <h3>LAYRS-projecten</h3>
-    <p>LAYRS brengt steden gebouw voor gebouw in kaart: elk met zijn leeftijd en de lagen geschiedenis waartoe het behoort.</p>
-    <ul>
-      <li><a href="/lab/amsterdam/">LAYRS: Amsterdam</a>, hier ben je nu.</li>
-      <li><a href="/lab/delft/">LAYRS: Delft</a>: 37.000 gebouwen van Delft, van Vermeers straatje tot de donderslag van 1654.</li>
-      <li><a href="/lab/london/">LAYRS: London</a>: 213.000 gebouwen van Binnen-Londen, van de Grote Brand tot de nieuwe skyline (in het Engels).</li>
-      <li><a href="/ru/lab/spb/">LAYRS: St. Petersburg</a>: 107.000 gebouwen van Sint-Petersburg, van Poesjkins woningen tot de luchtaanvalsrapporten van 1941 (in het Russisch).</li>
-    </ul>
-    <h3>Open source</h3>
-    <p>De code en de pijplijn staan op <a href="https://github.com/alexbarakov/amsterdam-by-building" target="_blank" rel="noopener">GitHub</a>. Ken je een stuk Amsterdamse geschiedenis
-    dat in de gebouwen zit? <a href="https://github.com/alexbarakov/amsterdam-by-building/blob/main/CONTRIBUTING.md" target="_blank" rel="noopener">Voeg het toe als laag</a>:
-    een lijst adressen, bij elk een kort verhaal en het Wikipedia-artikel waarop het rust.</p>
-    <h3>Gegevens</h3>
-    <p>Gedownload op 12 oktober 2026; straatbeelden worden live geladen.</p>
-    <ul>
-      <li>Gebouwen, daken, hoogtes, bouwjaren: 3D BAG v2025.09.03 (TU Delft), met de daken uit LoD 2.2 in het centrum en voor monumenten, op basis van de BAG. CC BY 4.0.</li>
-      <li>Torens en spitsen die het model weglaat: AHN-hoogtemodel (DSM), 0,5 m, via PDOK. CC0.</li>
-      <li>Water, grens, straten: BGT en BAG via PDOK en de gemeente Amsterdam. CC0.</li>
-      <li>Monumenten, historische lagen: rijksmonumentenregister (RCE) en open data van de gemeente Amsterdam. CC0 of CC BY.</li>
-      <li>Energielabels: RVO via de Atlas Leefomgeving van het RIVM. Publiek domein.</li>
-      <li>Namen, foto's, verhalen: Wikidata, Wikipedia, Wikimedia Commons; bij elke foto staan maker en licentie.</li>
-      <li>Straatbeelden: panorama's van de gemeente Amsterdam. CC BY 4.0.</li>
-      <li>Archieffoto's, jaren 1940–2010: beeldbank van het Stadsarchief Amsterdam, aan gebouwen gekoppeld door de Amsterdam Time Machine (Universiteit van Amsterdam). Getoond vanaf de server van het archief; elke foto linkt naar de beschrijving, met de rechten.</li>
-    </ul>
-    <p class="pages">Ook als gewone pagina’s, om te lezen en voor zoekmachines: <a href="explore/">Amsterdam, gebouw voor gebouw</a>.</p>
-    <h3>Methode</h3>
-    <p>Plaatshouders en afgeronde jaartallen in de BAG zijn geschat uit gedateerde buren; waar het monumentenregister een gebouw
-    eerder dateert, wint het register. Geschatte jaren zijn lichter en gemarkeerd met “c.”. Elk zelfgeschreven verhaal is
-    gecontroleerd aan zijn Wikipedia-artikel; de laag met bewoners is automatisch gevonden en kan fouten bevatten.</p>
-  </article>
+  <article lang="en" data-lang-block="en"><h2 id="about-title">About this map</h2></article>
+  <article lang="nl" data-lang-block="nl" hidden><h2>Over deze kaart</h2></article>
 </dialog>
 
 <div class="tally" aria-live="polite">
@@ -145,15 +67,10 @@
 
 <div id="card" class="card" hidden></div>
 <section id="focus" class="focusbox" hidden aria-live="polite"></section>
-<section id="quest" class="quest" hidden aria-live="polite"></section>
 <section id="walk" class="walkcard" hidden aria-live="polite"></section>
 <dialog id="walks" class="about walks" aria-labelledby="walks-title">
   <button class="about-close" aria-label="Close">×</button>
   <article id="walks-body"></article>
-</dialog>
-<dialog id="quests" class="about quests" aria-labelledby="quests-title">
-  <button class="about-close" aria-label="Close">×</button>
-  <article id="quests-body"></article>
 </dialog>
 <p class="howto">Drag to turn. Right-drag or Shift-drag to move. Scroll to zoom.</p>
 

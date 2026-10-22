@@ -2,7 +2,7 @@
 
 1. Walk the built-up city in 250 m cells with the Commons geosearch (cells that hit the 500 limit split in four).
 2. Read each title: 'Herengracht 276.JPG', 'Keizersgracht 272tm284', 'met RM2558tm65' → addresses or monuments.
-3. Addresses are geocoded to BAG buildings (PDOK Locatieserver, Amsterdam only, exact number); a match counts only
+3. Addresses are geocoded to BAG buildings (PDOK Locatieserver, the municipality only, exact number); a match counts only
    when the photo was taken within 150 m of the building, which rules out same-named streets elsewhere.
 4. Per building the best photo wins: a title naming this one address over a row, a recent photo over an archive one.
 """
@@ -17,9 +17,8 @@ import numpy as np
 import requests
 from pyproj import Transformer
 from shapely.geometry import Point
-from .city import DATA, WEB
+from .city import DATA, LABEL, UA, WEB
 
-UA = {"User-Agent": "amsterdam-by-building/0.1 (https://stop-token.com/lab/amsterdam/)"}
 API = "https://commons.wikimedia.org/w/api.php"
 CACHE = Path(f"{DATA}/raw/commons_geo.json")
 TO_RD = Transformer.from_crs(4326, 28992, always_xy=True)
@@ -89,7 +88,7 @@ def geocode(address):
     if address in GEO:
         return GEO[address]
     r = requests.get("https://api.pdok.nl/bzk/locatieserver/search/v3_1/free", headers=UA, timeout=60, params={
-        "q": address, "fq": ["type:adres", "woonplaatsnaam:Amsterdam"], "rows": 5, "fl": "weergavenaam,centroide_rd"}).json()
+        "q": address, "fq": ["type:adres", f"gemeentenaam:\"{LABEL}\""], "rows": 5, "fl": "weergavenaam,centroide_rd"}).json()
     exact = re.compile(re.escape(address) + r"(?:[A-Za-z]|-\w+)?,", re.I)
     docs = [d for d in r.get("response", {}).get("docs", []) if exact.match(d["weergavenaam"])]
     pt = tuple(map(float, docs[0]["centroide_rd"][6:-1].split())) if docs else None

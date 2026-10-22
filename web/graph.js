@@ -31,11 +31,12 @@ const COLOR = { person: '#1f3f9a', architect: '#0f8a7e', event: '#d0312d', organ
 // The order points are selected in gives their colour on the map, as in the map's layers.
 const SEL_COLORS = ['#ec0000', '#1f4e8c', '#d99a12', '#2e8b57', '#7b3fa0', '#00909a', '#8c5a2b', '#d6336c'];  // the map's GROUP_COLORS
 
-// The city comes from ?city=<name>, else from the page's data-city, as on the map; links keep a ?city they were given.
+// The city comes from ?city=<name>, else from the page's data-city, else it is the first one built, as on the map;
+// links keep a ?city they were given.
 const CITY_Q = new URLSearchParams(location.search).get('city');
-const CITY = CITY_Q || document.documentElement.dataset.city || 'amsterdam';
 const withCity = u => { if (CITY_Q) u.searchParams.set('city', CITY_Q); return u; };
-Promise.all([fetch(`data/${CITY}/graph.json`).then(r => r.json()), fetch(`data/${CITY}/city.json`).then(r => r.json())])
+Promise.resolve(CITY_Q || document.documentElement.dataset.city || fetch('data/cities.json').then(r => r.json()).then(c => c[0].city))
+  .then(CITY => Promise.all([fetch(`data/${CITY}/graph.json`).then(r => r.json()), fetch(`data/${CITY}/city.json`).then(r => r.json())]))
   .then(([G, city]) => init(G, city));
 
 function init(G, city) {

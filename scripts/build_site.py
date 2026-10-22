@@ -1,11 +1,9 @@
 """Put one city's viewer in a folder of its own, ready for static hosting (Cloudflare Pages): dist/<city>/.
 
-  uv run python scripts/build_site.py amersfoort
+  python scripts/build_site.py amersfoort
 
-The folder holds the viewer (web/ without other cities' data), the city's data under data/<city>/, and an index.html
-that opens on the city. Its head describes the city instead of Amsterdam's live site: no canonical link or
-structured data pointing there, no Amsterdam preview image, and noindex, since this is a test. Deploy with
-  npx wrangler pages deploy dist/<city> --project-name layrs-<city>
+The folder holds the viewer (web/ without other cities' data), the city's data under data/<city>/, and pages that
+open on the city and name it from the start. Build and deploy in one go with scripts/deploy.ps1.
 """
 import json
 import re
@@ -29,28 +27,22 @@ def main():
         (shutil.copytree if src.is_dir() else shutil.copy2)(src, out / name)
     shutil.copytree(f"web/data/{city}", out / "data" / city)
 
+    # The page names its city from the start, so nothing else shows before the map loads; noindex, it is a test.
     html = Path("web/index.html").read_text(encoding="utf-8")
     desc = f"All {n:,} buildings of {label} in 3D, coloured by the year they were built, with layers from the national monument register."
     html = html.replace('<html lang="en">', f'<html lang="en" data-city="{city}">', 1)
-    html = re.sub(r"<title>.*?</title>", f"<title>LAYRS: {label}</title>", html, count=1)
-    html = re.sub(r'<meta name="description" content="[^"]*">',
-                  f'<meta name="description" content="{desc}">\n<meta name="robots" content="noindex">', html, count=1)
-    html = re.sub(r'<link rel="canonical"[^>]*>\n', "", html)
-    html = re.sub(r'<meta property="og:(url|image)[^>]*>\n', "", html)
-    html = re.sub(r'<meta property="og:title" content="[^"]*">', f'<meta property="og:title" content="LAYRS: {label}">', html)
-    html = re.sub(r'<meta property="og:description" content="[^"]*">', f'<meta property="og:description" content="{desc}">', html)
-    html = re.sub(r'<link rel="alternate" type="text/csv"[^>]*>\n', "", html)
-    html = re.sub(r'<script type="application/ld\+json">.*?</script>\n', "", html, flags=re.S)
-    html = re.sub(r"<noscript>.*?</noscript>", "<noscript><p style=\"padding:24px;font:16px sans-serif\">This map needs JavaScript.</p></noscript>", html, flags=re.S)
-    html = html.replace("aria-label=\"3D map of Amsterdam's buildings\"", f"aria-label=\"3D map of {label}'s buildings\"")
+    noindex = '\n<meta name="robots" content="noindex">'
+    html = re.sub(r"<title>.*?</title>", f"<title>LAYRS: {label}</title>{noindex}", html, count=1)
+    html = re.sub(r'(<meta (?:name="description"|property="og:description") content=")[^"]*"',
+                  lambda m: f'{m.group(1)}{desc}"', html)
+    html = html.replace('<meta property="og:title" content="LAYRS">', f'<meta property="og:title" content="LAYRS: {label}">')
+    html = html.replace('<span class="layrs" aria-label="LAYRS">LAYRS</span> <i', f'<span class="layrs" aria-label="LAYRS">LAYRS</span>{label}<i')
     (out / "index.html").write_text(html, encoding="utf-8")
-    if cfg.get("features", {}).get("graph"):
-        g = Path("web/graph.html").read_text(encoding="utf-8")
-        g = g.replace('<html lang="en">', f'<html lang="en" data-city="{city}">', 1)
-        g = re.sub(r"<title>.*?</title>", f'<title>LAYRS: {label} — the graph</title>\n<meta name="robots" content="noindex">',
-                   g, count=1)
-        g = g.replace('<span class="g-mark">LAYRS</span>Amsterdam', f'<span class="g-mark">LAYRS</span>{label}')
-        (out / "graph.html").write_text(g, encoding="utf-8")
+    g = Path("web/graph.html").read_text(encoding="utf-8")
+    g = g.replace('<html lang="en">', f'<html lang="en" data-city="{city}">', 1)
+    g = re.sub(r"<title>.*?</title>", f"<title>LAYRS: {label} — the graph</title>{noindex}", g, count=1)
+    g = g.replace('<span class="g-mark">LAYRS</span> </a>', f'<span class="g-mark">LAYRS</span>{label}</a>')
+    (out / "graph.html").write_text(g, encoding="utf-8")
     # long cache for the heavy binary files, which change only with a new build
     (out / "_headers").write_text(f"/data/{city}/*.bin\n  Cache-Control: public, max-age=86400\n", encoding="utf-8")
 

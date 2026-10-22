@@ -4,8 +4,9 @@ Date sources, in order of trust:
   exact      BAG oorspronkelijkbouwjaar as recorded
   faint      a pre-1800 round year in excess of what neighbouring years predict;
              spread across its rounding step
-  estimated  BAG placeholder 1005, or an excess 1905 (a second, unofficial placeholder: the old centre
-             holds ~10x more 1905 buildings than 1904 or 1906); median year of the nearest dated neighbours
+  estimated  BAG placeholder 1005, or an excess of a suspect year (cities/<city>.json "suspect_years": a city may
+             hold far more buildings on one round year than on the years around it); median year of the nearest
+             dated neighbours
   monument   a rijksmonument whose RCE date is earlier than BAG's (BAG often holds a rebuilding year);
              when BAG is earlier, BAG stays: the RCE date often describes a later facade;
              RCE year when it gives one, otherwise spread across its century or part of one
@@ -130,7 +131,7 @@ def estimate_placeholders(p: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
 def clean_parts(q):
     """A few 3D BAG parts carry impossible heights (one at Petroleumhavenweg runs from -1,218 to 2,780 m and put a
     777 m spike on the map). Such a part keeps its median height when that is sane, else sits on the ground.
-    Amsterdam's tallest structure, the Hemweg chimney, is 174 m: anything past 400 m or below -100 m is broken."""
+    The tallest structures in the Netherlands stay well below 400 m: anything past 400 m or below -100 m is broken."""
     broken = (q.b3_h_max > 400) | (q.b3_h_min < -100)
     sane = q.b3_h_50p.between(-50, 400)
     q.loc[broken, "b3_h_70p"] = np.where(sane[broken], q.b3_h_50p[broken], np.nan)

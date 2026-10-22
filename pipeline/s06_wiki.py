@@ -14,9 +14,8 @@ from urllib.parse import unquote
 
 import pandas as pd
 import requests
-from .city import DATA, WEB
+from .city import DATA, UA, WEB
 
-UA = {"User-Agent": "amsterdam-by-building/0.1 (https://stop-token.com/lab/amsterdam/)"}
 
 
 def get_json(url, params):
@@ -140,6 +139,22 @@ def main():
                 entries.append(dict(label=None, label_nl=None, wiki=None, wiki_nl=None, architects=[], styles=[], image=img))
             added += 1
         print(added, "buildings got a Commons photo by address")
+    # Monuments the register names (s00_fetch_rce) give their name to buildings that have none yet.
+    named = 0
+    for m in json.load(open(f"{DATA}/raw/layers/monuments.json", encoding="utf-8")):
+        if not m.get("name"):
+            continue
+        for bag in m["panden"]:
+            if bag not in index:
+                index[bag] = len(entries)
+                entries.append(dict(label=m["name"], label_nl=m["name"], wiki=None, wiki_nl=None, architects=[], styles=[],
+                                    image=None))
+            elif not entries[index[bag]].get("label"):
+                entries[index[bag]].update(label=m["name"], label_nl=m["name"])
+            else:
+                continue
+            named += 1
+    print(named, "buildings named by the monument register")
     Path(f"{WEB}/wiki.json").write_text(json.dumps(entries, ensure_ascii=False, separators=(",", ":")))
     pd.DataFrame({"bag": list(index), "wk": list(index.values())}).to_parquet(f"{DATA}/wiki_index.parquet")
     print(len(entries), "entries for", len(index), "panden;", Path(f"{WEB}/wiki.json").stat().st_size // 1024, "KB")

@@ -15,9 +15,8 @@ import pandas as pd
 import requests
 import shapely
 from shapely.geometry import box
-from .city import DATA
+from .city import DATA, UA
 
-UA = {"User-Agent": "amsterdam-by-building/0.1 (https://stop-token.com/lab/amsterdam/)"}
 
 WCS = "https://service.pdok.nl/rws/ahn/wcs/v1_0"
 CACHE = Path(f"{DATA}/raw/ahn_dsm")

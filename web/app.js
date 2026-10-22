@@ -17,8 +17,10 @@ const MODE = { period: 0, floors: 1, energy: 2, layers: 3 };
 const ENERGY_COLORS = ['#efeee9', '#c1272d', '#e4572e', '#f08a24', '#f6c445', '#c9d64a', '#8cc152', '#4caf50',
   '#2e9a49', '#1d8040', '#126b35', '#0b5a2c', '#064a24'];
 
-// The city comes from ?city=<name>, else from the page's data-city; its files are in data/<city>/ (pipeline/city.py).
-const CITY = new URLSearchParams(location.search).get('city') || document.documentElement.dataset.city || 'amsterdam';
+// The city comes from ?city=<name>, else from the page's data-city, else it is the first one built (data/cities.json,
+// s03_tiles); its files are in data/<city>/ (pipeline/city.py).
+const CITY = new URLSearchParams(location.search).get('city') || document.documentElement.dataset.city
+  || (await fetch('data/cities.json').then(r => r.json()))[0].city;
 const D = `data/${CITY}/`;
 const [config, layers, attrBuf] = await Promise.all([
   fetch(D + 'city.json').then(r => r.json()),
@@ -26,8 +28,6 @@ const [config, layers, attrBuf] = await Promise.all([
   fetch(D + 'attrs.bin').then(r => r.arrayBuffer()),
 ]);
 const attrs = new DataView(attrBuf);
-// What only some cities have (cities/<city>.json): Amsterdam's street panoramas, archive photos, graph and quests.
-const FEATURES = config.features || {};
 document.title = `LAYRS: ${config.label}`;
 
 // ---------- Language ----------
@@ -78,7 +78,6 @@ const NL_UI = {
   'Next': 'Volgende',
   'Open its card': 'Open de kaart van het gebouw',
   'Not that one.': 'Die niet.',
-  'A true Amsterdammer.': 'Een echte Amsterdammer.',
   'You know your way around.': 'Je weet de weg.',
   'A good walk.': 'Een mooie wandeling.',
   'Time for a walk through town.': 'Tijd voor een wandeling door de stad.',
@@ -118,9 +117,6 @@ const NL_UI = {
   'Year from the register of national monuments, which dates the building earlier than BAG does.': 'Jaartal uit het rijksmonumentenregister, dat het gebouw eerder dateert dan de BAG.',
   'Dated by the register of national monuments to a century or part of one; the map spreads it across that span.': 'Door het rijksmonumentenregister gedateerd op een eeuw of een deel daarvan; de kaart spreidt het over die periode.',
   'Year from Wikidata, which dates the building earlier than BAG does; the register of national monuments gives no date.': 'Jaartal uit Wikidata, dat het gebouw eerder dateert dan de BAG; het rijksmonumentenregister geeft geen datering.',
-  'Before 1600': 'Vóór 1600', '1600–1665 Canal ring': '1600–1665 Grachtengordel', '1870–1913 Nineteenth-century belt': '1870–1913 Negentiende-eeuwse gordel',
-  '1914–1940 Amsterdam School': '1914–1940 Amsterdamse School', '1941–1964 Garden cities': '1941–1964 Tuinsteden', '1965–1984 Bijlmer era': '1965–1984 Bijlmertijd',
-  '1985–1999 Eastern docks': '1985–1999 Oostelijk Havengebied', '2000– IJburg, Zuidas, Noord': '2000– IJburg, Zuidas, Noord',
   'Layers': 'Lagen',
   'All layers': 'Alle lagen',
   'A building already stood on this footprint in the 1832 land register. BAG’s year may record a rebuilding, or this house replaced the older one.': 'Op deze plek stond al een gebouw in het kadaster van 1832. Het jaartal van de BAG kan een verbouwing zijn, of dit huis verving het oudere.',
@@ -203,10 +199,8 @@ const fmtLocale = () => LANG === 'nl' ? 'nl-NL' : 'en';
 const periods = config.periods;
 for (const p of periods) if (p.label_nl) NL_UI[p.label] = p.label_nl;
 document.querySelector('.masthead h1').childNodes[1].textContent = config.label;
-if (!FEATURES.graph) document.querySelector('.graph-open').style.display = 'none';
-if (!FEATURES.quests) document.querySelector('.quests-open').style.display = 'none';
-// The page's about text is Amsterdam's; another city gets one written from its own sources.
-if (CITY !== 'amsterdam') {
+// The about text, written from the city's own numbers and sources.
+{
   const n = config.stats.buildings, bv = config.buildingSource === '3dbv';
   const [en, nl] = document.querySelectorAll('#about article');
   en.innerHTML = `<h2 id="about-title">About this map</h2>
@@ -582,7 +576,7 @@ for (const w of pool) {
     addTile(data);
     loaded++;
     document.getElementById('progress').textContent = Math.round(100 * loaded / config.tiles.length);
-    if (loaded === config.tiles.length) { document.getElementById('loading').hidden = true; cityReady(); openDeepLink(); }
+    if (loaded === config.tiles.length) { document.getElementById('loading').hidden = true; openDeepLink(); }
     next();
   };
   next();
@@ -651,7 +645,6 @@ const periodOf = y => periods.find(p => y >= p.from && y <= p.to) || periods[0];
 // Hover shows a light card that follows the pointer; a click pins it, with the article extract and links.
 let wiki = [], didYouKnow = {};
 fetch(D + 'wiki.json').then(r => r.json()).then(w => { wiki = w; });
-if (CITY === 'amsterdam') fetch(D + 'facts.json').then(r => r.json()).then(f => { didYouKnow = f; }); // 'Did you know', checked in s11_facts
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const link = (href, text) => `<a href="${esc(href)}" target="_blank" rel="noopener">${esc(text)}</a>`;
 
@@ -666,13 +659,6 @@ function toLatLon(x, z) {
     + 0.00128 * dX * dY ** 4 + 0.00022 * dY ** 2 - 0.00022 * dX ** 2 + 0.00026 * dX ** 5) / 3600;
   return [lat, lon];
 }
-// The city's street panoramas (CC BY 4.0), turned towards the building from the nearest point on the street.
-function streetView(b) {
-  const [lat, lon] = toLatLon(b.x, b.z);
-  return `https://api.data.amsterdam.nl/panorama/thumbnail/?lat=${lat.toFixed(6)}&lon=${lon.toFixed(6)}&width=640&radius=80`;
-}
-const svCredit = () => `${t('Street view')}: <a href="https://data.amsterdam.nl" target="_blank" rel="noopener">Gemeente Amsterdam</a>, CC BY 4.0`;
-
 // The article in the reader's language when there is one.
 const wikiOf = w => (LANG === 'nl' && w?.wiki_nl?.extract ? w.wiki_nl : w?.wiki) || w?.wiki_nl;
 
@@ -693,9 +679,7 @@ function residentsHtml(b, pinned) {
 }
 
 // ---------- Photos through the years ----------
-// Archive pictures from the Stadsarchief beeldbank (s12_archive), in 64 shards keyed by a CRC-32 of the BAG id.
-const CRC = Array.from({ length: 256 }, (_, n) => { for (let k = 0; k < 8; k++) n = n & 1 ? 0xEDB88320 ^ (n >>> 1) : n >>> 1; return n >>> 0; });
-const crc32 = s => { let c = ~0; for (const ch of s) c = CRC[(c ^ ch.charCodeAt(0)) & 255] ^ (c >>> 8); return (~c) >>> 0; };
+// A card shows a building's photos as slides, today's last; for now that is the one from Wikimedia Commons.
 // ---------- The card's head ----------
 // The head is painted in the building's period colour, so the card says its age before it is read: name, address,
 // year. Text goes dark on the light colours of the palette and white on the dark ones.
@@ -731,38 +715,12 @@ function cardHeadHtml(b, w, period) {
     </header>`;
 }
 
-const archiveShards = {};
-function archiveOf(bag, then) {
-  if (!FEATURES.archive) return [];
-  const n = String(crc32(bag) % 64).padStart(2, '0');
-  if (archiveShards[n] === undefined) {
-    archiveShards[n] = null;
-    fetch(`${D}archive/${n}.json`).then(r => r.json()).then(d => { archiveShards[n] = d; then(); }).catch(() => {});
-  }
-  return archiveShards[n]?.[bag] || [];
-}
-// The archive's thumbnails load straight from its image host. A proxy through the site's Worker does not work:
-// the host answers data-centre requests with a bot challenge.
-const SAA_IMG = 'https://images.memorix.nl/ams/thumb/';
-const KIND_EN = { bouwtekening: 'building drawing', tekening: 'drawing', prent: 'print', prentbriefkaart: 'picture postcard' };
 let slides = [], slide = 0;
-// Oldest archive picture first, today's photo (Wikimedia, or the street panorama) last; the card opens on today.
 function photosHtml(b, im, credit, pinned) {
-  const archive = archiveOf(b.bag, () => refreshCard(b.gid));
-  slides = [...archive.map(a => ({
-    src: `${SAA_IMG}640x480/${a.t}.jpg`, label: String(a.y), page: `https://archief.amsterdam/beeldbank/detail/${a.r}`,
-    credit: `${a.k ? esc(LANG === 'nl' ? a.k : KIND_EN[a.k] || a.k) + ', ' : ''}${a.y}${a.m ? ', ' + esc(a.m) : ''}, ${pinned
-      ? link(`https://archief.amsterdam/beeldbank/detail/${a.r}`, 'Stadsarchief Amsterdam') : 'Stadsarchief Amsterdam'}`,
-  })), im ? { src: im.thumb, label: t('Today'), credit: `${t('Photo')}: ${credit}` }
-    : FEATURES.panorama ? { sv: streetView(b), label: t('Today'), credit: pinned ? svCredit() : `${t('Street view')}: Gemeente Amsterdam, CC BY 4.0` }
-    : null].filter(Boolean);
+  slides = im ? [{ src: im.thumb, label: t('Today'), credit: `${t('Photo')}: ${credit}` }] : [];
   if (!slides.length) return '';
   slide = slides.length - 1;
-  const s = slides[slide];
-  const span = archive.length && `${archive[0].y}${archive.length > 1 ? '–' + archive.at(-1).y : ''}`;
-  const more = !archive.length || pinned ? '' : `<p class="more-photos">${LANG === 'nl'
-    ? `+ ${archive.length} archieffoto${archive.length > 1 ? "'s" : ''}, ${span}. Klik om te bladeren`
-    : `+ ${archive.length} archive photo${archive.length > 1 ? 's' : ''}, ${span}. Click to browse`}</p>`;
+  const s = slides[slide], more = '';
   return `<figure class="photo${s.sv ? ' sv' : ''}"><div class="frame">${s.sv ? `<img data-sv="${esc(s.sv)}" alt="">` : `<img src="${esc(s.src)}" alt="">`}
     ${pinned && slides.length > 1 ? `<button class="prev" aria-label="${t('Earlier')}">‹</button><button class="next" aria-label="${t('Later')}">›</button>` : ''}
     ${slides.length > 1 ? `<span class="year">${s.label}</span>` : ''}</div>
@@ -876,7 +834,6 @@ function placeCard(x, y) {
 let hoverGid = -1;
 function showCard(gid, x, y) {
   if (pinnedGid >= 0 || phone.matches) return;
-  if (cardsLocked()) { card.hidden = true; return; }
   if (gid < 0) { card.hidden = true; hoverGid = -1; return; }
   if (gid !== hoverGid || card.hidden) {
     // Re-render only when the building changes, so the photo is not reloaded every frame.
@@ -924,9 +881,6 @@ canvas.addEventListener('pointerup', e => {
     return;
   }
   const gid = pick(e.clientX, e.clientY);
-  if (quest && !solved && qStep().kind === 'where') { whereClick(e.clientX, e.clientY); return; }
-  if (quest && !solved && qStep().kind === 'find') { questClick(gid); return; }
-  if (cardsLocked()) return;
   pinCard(gid === pinnedGid ? -1 : gid, e.clientX, e.clientY);
 });
 canvas.addEventListener('pointerleave', () => { pointer = null; if (pinnedGid < 0) card.hidden = true; uniforms.uHover.value = -1; });
@@ -958,176 +912,8 @@ function stepFlight(now) {
   if (k >= 1) { const d = flight.done; flight = null; d?.(); }
 }
 
-// ---------- Quests ----------
-// Short walks through the city as riddles (pipeline/quests.py, checked by s13_quests): find a building on the map,
-// point to where a building stands, guess its year with the colours hidden, or pick one of three answers.
-// Every answer is worth up to 100 points; hints and wrong answers cost points. A finished quest can be sent to a
-// friend as a challenge: the link opens the same quest with the score to beat. Progress stays in this browser.
-let quests = [];
-if (FEATURES.quests) fetch(D + 'quests.json').then(r => r.ok ? r.json() : []).then(q => { quests = q; challengeFromUrl(); }).catch(() => {});
-const questEl = document.getElementById('quest');
-const questsDlg = document.getElementById('quests');
+// A text in the reader's language: {en, nl} objects as the walks carry them.
 const L10 = o => o?.[LANG] || o?.en || '';
-const LEVEL = ['', 'Easy', 'Medium', 'Hard'];
-const qStore = () => { try { return JSON.parse(localStorage.getItem('ams-quests2') || '{}'); } catch { return {}; } };
-function qSave(id, patch) {
-  try { const p = qStore(); p[id] = { ...(p[id] || {}), ...patch }; localStorage.setItem('ams-quests2', JSON.stringify(p)); } catch {}
-}
-const crosses = (n, of = 3) => `<span class="q-x" aria-hidden="true">${Array.from({ length: of }, (_, i) =>
-  `<i class="${i < n ? 'on' : ''}">×</i>`).join('')}</span>`;
-const levelMark = lv => `<span class="q-level">${crosses(lv)}${t(LEVEL[lv])}</span>`;
-const fmtN = n => n.toLocaleString(fmtLocale());
-const maxOf = q => q.steps.length * 100;
-// A small seeded generator: the same circle offset and answer order every time a step is played.
-function rng(seed) { let h = 2166136261; for (const c of seed) h = Math.imul(h ^ c.charCodeAt(0), 16777619); return () => ((h = Math.imul(h ^ (h >>> 15), 2246822507) ^ Math.imul(h ^ (h >>> 13), 3266489909)) >>> 0) / 4294967296; }
-
-function renderQuestList() {
-  const p = qStore();
-  const total = quests.reduce((n, q) => n + (p[q.id]?.best || 0), 0), max = quests.reduce((n, q) => n + maxOf(q), 0);
-  const tile = (q, st) => {
-    const n = q.steps.length, done = Math.min(st.step || 0, n), complete = st.best !== undefined && !(st.step > 0 && st.step < n);
-    return `<li class="q-tile l${q.level}${complete ? ' complete' : ''}">
-      ${levelMark(q.level)}
-      <h3>${esc(L10(q.title))}</h3><p>${esc(L10(q.intro))}</p>
-      <footer><span class="q-progress">${complete ? `${t('Best')}: ${fmtN(st.best)}` : done ? `${done} / ${n}` : `${n} ${t('steps')}`}</span>
-        <button class="q-start" data-q="${q.id}">${complete ? t('Play again') : done ? t('Continue') : t('Start')}</button></footer></li>`;
-  };
-  document.getElementById('quests-body').innerHTML = `
-    <h2 id="quests-title">${t('Quests')}</h2>
-    <p class="q-lede">${t('Find buildings from riddles and old photos, point to them on the map, guess their age with the colours switched off. Up to 100 points an answer; hints cost points.')}</p>
-    <p class="q-score">${t('Your points')}: <b>${fmtN(total)}</b> / ${fmtN(max)}</p>
-    <ul class="q-grid">${quests.map(q => tile(q, p[q.id] || {})).join('')}</ul>`;
-  questsDlg.querySelectorAll('.q-start').forEach(b => b.onclick = () => {
-    const q = quests.find(q => q.id === b.dataset.q), st = qStore()[q.id] || {};
-    questsDlg.close();
-    const resume = st.step > 0 && st.step < q.steps.length;
-    rival = null;
-    startQuest(q, resume ? st.step : 0, resume ? st.score || 0 : 0, resume ? st.marks || [] : []);
-  });
-}
-function openQuests() { renderQuestList(); questsDlg.showModal(); }
-document.querySelector('.quests-open').onclick = openQuests;
-questsDlg.querySelector('.about-close').onclick = () => questsDlg.close();
-questsDlg.addEventListener('click', e => { if (e.target === questsDlg) questsDlg.close(); });
-
-// A friend's challenge: ?quest=<id>&beat=<points> opens that quest once the city has loaded.
-let rival = null, cityLoaded = false, pendingQuest = null;
-function challengeFromUrl() {
-  const u = new URLSearchParams(location.search), q = quests.find(q => q.id === u.get('quest'));
-  if (!q) return;
-  rival = Number.isFinite(+u.get('beat')) && u.get('beat') !== null ? Math.max(0, Math.min(maxOf(q), +u.get('beat'))) : null;
-  pendingQuest = q;
-  if (cityLoaded) cityReady();
-}
-function cityReady() {
-  cityLoaded = true;
-  if (pendingQuest) { const q = pendingQuest; pendingQuest = null; startQuest(q, 0, 0, []); }
-}
-
-// On the ground: the search circle (red ring around, not centred on, the answer), and for "where" steps the
-// player's guess (a black dot), the answer (a red dot) and the line between them.
-const groundMat = (color, opacity = 1) => new THREE.MeshBasicMaterial({ color, depthTest: false, transparent: true, opacity });
-const onGround = m => { m.rotation.x = -Math.PI / 2; m.renderOrder = 20; return m; };
-const ring = new THREE.Group();
-ring.add(onGround(new THREE.Mesh(new THREE.RingGeometry(0.97, 1, 128), groundMat(0xec0000, 0.95))));
-ring.add(onGround(new THREE.Mesh(new THREE.CircleGeometry(0.97, 128), groundMat(0xec0000, 0.06))));
-ring.visible = false;
-scene.add(ring);
-const pins = new THREE.Group();
-const guessDot = onGround(new THREE.Mesh(new THREE.CircleGeometry(1, 32), groundMat(0x000000)));
-const answerDot = onGround(new THREE.Mesh(new THREE.RingGeometry(0.55, 1, 32), groundMat(0xec0000)));
-const pinLine = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), groundMat(0x000000, 0.8));
-onGround(pinLine);
-pins.add(pinLine, guessDot, answerDot);
-pins.visible = false;
-scene.add(pins);
-function showPins(gx, gz, ax, az, d) {
-  const s = Math.max(10, d / 30);
-  guessDot.position.set(gx, 3, gz); guessDot.scale.setScalar(s * 0.8);
-  answerDot.position.set(ax, 3, az); answerDot.scale.setScalar(s * 1.2);
-  pinLine.position.set((gx + ax) / 2, 2.5, (gz + az) / 2);
-  pinLine.scale.set(Math.max(1, d), s * 0.25, 1);
-  pinLine.rotation.z = -Math.atan2(az - gz, ax - gx);
-  pins.visible = true;
-}
-
-// "Show me": a red pin standing on the building, seen from anywhere above the city.
-const marker = new THREE.Group();
-const pinMat = new THREE.MeshBasicMaterial({ color: 0xec0000, depthTest: false, transparent: true });
-const stem = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 1, 8), pinMat), head = new THREE.Mesh(new THREE.SphereGeometry(1, 20, 14), pinMat);
-stem.renderOrder = head.renderOrder = 21;
-marker.add(stem, head);
-marker.visible = false;
-scene.add(marker);
-function showMarker(b) {
-  const top = b.height, len = 70;
-  stem.scale.set(1.6, len, 1.6); stem.position.set(0, top + len / 2, 0);
-  head.scale.setScalar(9); head.position.set(0, top + len, 0);
-  marker.position.set(b.x, 0, b.z); marker.visible = true;
-}
-
-let quest = null, step = 0, score = 0, marks = [], hintsShown = 0, tries = 0, solved = false, revealed = false, lastDist = null;
-let folded = false, guess = 1800, missed = null;
-const qStep = () => quest.steps[step];
-const stepGids = s => s.bags.map(gidOf).filter(g => g >= 0);
-function centre(gids) {
-  const bs = gids.map(building);
-  return [bs.reduce((a, b) => a + b.x, 0) / bs.length, bs.reduce((a, b) => a + b.z, 0) / bs.length];
-}
-// The map's state while a step asks about one building: its card locked, its colours hidden for a year riddle.
-let quizGid = -1;
-function setQuiz(gid, blind) {
-  quizGid = gid;
-  uniforms.uSelected.value = gid;
-  uniforms.uBlind.value = gid < 0 ? 0 : blind ? 1 : 2;
-  if (gid >= 0) { pinCard(-1); uniforms.uSelected.value = gid; }
-}
-// Cards stay closed while they would give the answer away: a building asked about, or any name in a "where" step.
-const cardsLocked = () => quest && !solved && (quizGid >= 0 || qStep().kind === 'where');
-
-function startQuest(q, n, sc = 0, mk = []) {
-  quest = q; step = n; score = sc; marks = mk;
-  document.body.classList.add('questing');
-  pinCard(-1);
-  enterStep(true);
-}
-// The camera over the box around every building the quest visits.
-function overview() {
-  const bs = quest.steps.flatMap(stepGids).map(building);
-  const x0 = Math.min(...bs.map(b => b.x)), x1 = Math.max(...bs.map(b => b.x)), z0 = Math.min(...bs.map(b => b.z)), z1 = Math.max(...bs.map(b => b.z));
-  questFly((x0 + x1) / 2, (z0 + z1) / 2, Math.min(7000, Math.max(900, Math.hypot(x1 - x0, z1 - z0) * 1.5)));
-}
-function enterStep(first) {
-  hintsShown = 0; tries = 0; solved = false; revealed = false; lastDist = null; folded = false; guess = 1800; missed = null;
-  ring.visible = false; pins.visible = false; marker.visible = false;
-  const s = qStep(), gids = stepGids(s);
-  if (s.kind === 'find' || s.kind === 'where') {
-    setQuiz(-1, false);
-    // A find quest opens on all of its buildings; every "where" step goes back to the whole city.
-    if (first || s.kind === 'where') overview();
-  } else if (gids.length) {
-    const b = building(gids[0]);
-    setQuiz(gids[0], s.kind === 'year');
-    questFly(b.x, b.z, s.kind === 'year' ? 300 : 380);
-  }
-  renderQuest();
-}
-// On a phone the quest sits over the top half of the map: aim past the building so it lands in the lower half.
-function questFly(x, z, dist, done = null) {
-  if (phone.matches) {
-    const f = controls.target.clone().sub(camera.position).setY(0).normalize();
-    x += f.x * dist * 0.2; z += f.z * dist * 0.2;
-  }
-  flyTo(x, z, done, dist);
-}
-function closeQuest() {
-  document.body.classList.remove('questing');
-  quest = null; questEl.hidden = true; ring.visible = false; pins.visible = false; marker.visible = false; setQuiz(-1, false);
-}
-function setModeNamed(name) {
-  if (name === 'floors' || name === 'energy') { setBuildingView(MODE[name]); return; }
-  document.querySelector(`.modes button[data-mode="${MODE[name]}"]`)?.click();
-}
 // Storeys and energy labels are views of the buildings themselves; they live in the layers list.
 function setBuildingView(m) {
   document.querySelectorAll('.modes button[data-mode]').forEach(x => x.setAttribute('aria-pressed', x.dataset.mode === String(MODE.layers)));
@@ -1137,199 +923,12 @@ function setBuildingView(m) {
   if (!phone.matches) setCollapsed(false);
   renderPanel(); drawHist();
 }
-function showRing() {
-  const s = qStep(), [x, z] = centre(stepGids(s));
-  const r = { 1: 220, 2: 300, 3: 380 }[quest.level] || 300;
-  const k = rng(quest.id + step), a = k() * Math.PI * 2, d = r * 0.55 * Math.sqrt(k());
-  const cx = x + Math.cos(a) * d, cz = z + Math.sin(a) * d;
-  ring.position.set(cx, 2, cz); ring.scale.setScalar(r); ring.visible = true;
-  questFly(cx, cz, r * 5);
-}
-
-function photoOf(s) {
-  if (s.clue?.id) return { src: `${SAA_IMG}640x480/${s.clue.thumb}.jpg`, credit: `${link(`https://archief.amsterdam/beeldbank/detail/${s.clue.id}`, 'Stadsarchief Amsterdam')}, ${s.clue.year}`, year: s.clue.year };
-  if (s.clue?.thumb) return { src: s.clue.thumb, credit: link(s.clue.page || s.clue.thumb, [s.clue.artist, s.clue.license].filter(Boolean).join(', ') || 'Wikimedia Commons') };
-  return null;
-}
-const progress = () => `<div class="q-steps">${quest.steps.map((_, i) => `<i class="${i < step || (i === step && solved) ? 'done' : i === step ? 'now' : ''}"></i>`).join('')}
-  <span>${fmtN(score)} ${t('pts')}</span></div>`;
-// Points: a find loses 25 a hint (never below 25); a choice gives 100, 40, then nothing; a year guess and a
-// "where" tap lose points smoothly with the distance.
-const HINT_COST = 25;
-const worth = () => {
-  const s = qStep();
-  if (s.kind === 'find') return revealed ? 0 : Math.max(25, 100 - HINT_COST * hintsShown);
-  if (s.kind === 'choice') return [100, 40, 0][Math.min(tries, 2)];
-  return 100;
-};
-const yearPoints = d => Math.round(100 * Math.exp(-d / 30));
-const wherePoints = m => Math.round(100 * Math.exp(-m / 450));
-const fmtDist = m => m < 1000 ? `${Math.round(m / 10) * 10} m` : `${(m / 1000).toLocaleString(fmtLocale(), { maximumFractionDigits: 1 })} km`;
-
-function renderQuest() {
-  if (!quest) return;
-  const s = qStep(), ph = photoOf(s);
-  questEl.className = `quest k-${s.kind}${solved ? ' solved' : ''}${folded ? ' folded' : ''}`;
-  // Once answered, a "where" step drops its photo so the map shows the guess and the answer.
-  const photo = ph && !(solved && (s.clue?.id || s.kind === 'where')) ? `<figure class="q-photo"><img src="${esc(ph.src)}" alt="${t('A photo of the building')}">${ph.year ? `<span class="year">${ph.year}</span>` : ''}</figure><p class="q-credit">${ph.credit}</p>` : '';
-  let body = '';
-  if (s.kind === 'find') {
-    const hints = Array.from({ length: hintsShown }, (_, i) => i === 0 ? t('Look inside the red circle.') : L10(s.hints[i - 1]));
-    const more = hintsShown < s.hints.length + 1;
-    body = `${photo}
-      <p class="q-riddle">${esc(L10(s.riddle))}</p>
-      ${hints.length ? `<ul class="q-hints">${hints.map(h => `<li>${esc(h)}</li>`).join('')}</ul>` : ''}
-      ${solved ? '' : `<p class="q-feedback">${t('Find it on the map and click it.')}</p>
-      <div class="q-actions">
-        ${s.mode ? `<button class="q-mode">${t(s.mode === 'floors' ? 'Colour by floors' : 'Colour by period')}</button>` : ''}
-        <span class="q-quiet">${more ? `<button class="q-hint">${t('Hint')} −${HINT_COST}</button>` : ''}<button class="q-reveal">${t('Show me')}</button></span></div>`}`;
-  } else if (s.kind === 'where') {
-    body = `${photo}<p class="q-riddle">${esc(L10(s.riddle))}</p>
-      ${solved ? '' : `<p class="q-feedback">${t('Tap the map where you think it stands.')}</p>`}`;
-  } else if (s.kind === 'year') {
-    body = `${photo}
-      <p class="q-riddle">${esc(L10(s.ask))}</p>
-      ${solved ? '' : `<div class="q-year"><output>${guess}</output>
-        <input type="range" min="1250" max="2025" step="1" value="${guess}" aria-label="${t('Your guess')}">
-        <div class="q-scale"><span>1250</span><span>1500</span><span>1750</span><span>2000</span></div></div>
-        <div class="q-actions"><button class="primary q-guess">${t('Guess')}</button></div>`}`;
-  } else {
-    const order = s.options.map((o, i) => i).sort((a, b) => rng(quest.id + step + a)() - rng(quest.id + step + b)());
-    body = `
-      <p class="q-riddle">${esc(L10(s.ask))}</p>
-      <div class="q-options">${order.map(i => `<button data-i="${i}" ${solved ? 'disabled' : ''} class="${solved && i === 0 ? 'right' : ''}">${esc(L10(s.options[i]))}</button>`).join('')}</div>
-      ${solved ? '' : `<p class="q-feedback"></p>`}`;
-  }
-  questEl.innerHTML = `
-    <button class="q-close" aria-label="${t('Close')}">×</button>
-    <header><b>${esc(L10(quest.title))}</b>${levelMark(quest.level)}</header>
-    ${progress()}${rival !== null && step === 0 && !solved ? `<p class="q-rival">${t('Score to beat')}: <b>${fmtN(rival)}</b></p>` : ''}${body}${solved ? revealHtml(s) : ''}`;
-  questEl.hidden = false;
-  wireQuest(s);
-}
-function revealHtml(s) {
-  const got = marks[step] ?? 0, last = step === quest.steps.length - 1;
-  const g = stepGids(s)[0], b = g >= 0 ? building(g) : null;
-  const d = Math.abs(guess - (s.year || 0));
-  const extra = s.kind === 'year' ? `<p class="q-yeardiff">${t('Your guess')}: <b>${guess}</b>. ${t('Built')}: <b>${s.year}</b>. ${d === 0 ? t('Exactly right.') : `${d} ${t(d === 1 ? 'year off' : 'years off')}.`}</p>`
-    : s.kind === 'where' && missed !== null ? `<p class="q-yeardiff">${missed < 30 ? t('Spot on.') : `${fmtDist(missed)} ${t('off')}.`}</p>` : '';
-  const then = s.clue?.id && b ? `<div class="q-then"><figure><img src="${esc(photoOf(s).src)}" alt=""><figcaption>${s.clue.year}</figcaption></figure>${
-    b.wk >= 0 && wiki[b.wk]?.image?.thumb ? `<figure><img src="${esc(wiki[b.wk].image.thumb)}" alt=""><figcaption>${t('Today')}</figcaption></figure>` : ''}</div>` : '';
-  return `<div class="q-found">
-    <div class="q-stamp${got === 100 ? ' full' : ''}" aria-label="${got} ${t('pts')}">+${got}</div>
-    ${then}${extra}
-    <p>${esc(L10(s.reveal))}${s.sources?.length ? ' ' + s.sources.map((u, i) => link(u, s.sources.length > 1 ? `${t('Source')} ${i + 1}` : t('Source'))).join(', ') : ''}</p>
-    ${revealed ? `<p class="q-earned">${t('Shown, not found: no points.')}</p>` : ''}</div>
-    <div class="q-actions">${last ? `<button class="primary q-finish">${t('See the result')}</button>`
-      : `<button class="primary q-next">${t('Next')}</button>`}<button class="q-card">${t('Open its card')}</button></div>`;
-}
-function wireQuest(s) {
-  questEl.querySelector('header').onclick = () => { folded = !folded; questEl.classList.toggle('folded', folded); };
-  questEl.querySelector('.q-close').onclick = closeQuest;
-  const foldOnPhone = () => { if (phone.matches) { folded = true; questEl.classList.add('folded'); } };
-  questEl.querySelector('.q-hint')?.addEventListener('click', () => { hintsShown++; if (hintsShown === 1) showRing(); renderQuest(); if (hintsShown === 1) foldOnPhone(); });
-  questEl.querySelector('.q-mode')?.addEventListener('click', () => { setModeNamed(s.mode); foldOnPhone(); });
-  questEl.querySelector('.q-reveal')?.addEventListener('click', () => {
-    const g = stepGids(s)[0]; if (g === undefined) return;
-    revealed = true; const b = building(g);
-    questFly(b.x, b.z, 420, () => solve(g));
-  });
-  const range = questEl.querySelector('.q-year input');
-  if (range) range.oninput = () => { guess = +range.value; questEl.querySelector('.q-year output').textContent = guess; };
-  questEl.querySelector('.q-guess')?.addEventListener('click', () => solve(stepGids(s)[0], yearPoints(Math.abs(guess - s.year))));
-  questEl.querySelectorAll('.q-options button').forEach(b => b.onclick = () => {
-    if (+b.dataset.i === 0) { b.classList.add('right'); solve(stepGids(s)[0]); return; }
-    tries++; b.classList.add('wrong'); b.disabled = true;
-    const fb = questEl.querySelector('.q-feedback'); fb.textContent = `${t('Not that one.')} −${100 - worth()}`; fb.classList.remove('miss'); void fb.offsetWidth; fb.classList.add('miss');
-  });
-  questEl.querySelector('.q-next')?.addEventListener('click', () => { step++; qSave(quest.id, { step, score, marks }); enterStep(false); });
-  questEl.querySelector('.q-finish')?.addEventListener('click', finished);
-  questEl.querySelector('.q-card')?.addEventListener('click', () => { const g = stepGids(s)[0]; const b = building(g); quizGid = -1; uniforms.uBlind.value = 0; pins.visible = false; flyTo(b.x, b.z, () => pinCard(g, innerWidth * 0.3, 120), 380); });
-}
-function solve(gid, points) {
-  solved = true; folded = false; ring.visible = false;
-  const got = points ?? worth();
-  marks[step] = got; score += got;
-  quizGid = -1;
-  // The answer stays marked: the building turns red in its own colours' city, and "Show me" also rings it.
-  // Shown rather than found: the rest of the city goes grey, the building turns red, a pin and a ring mark it.
-  uniforms.uBlind.value = gid < 0 ? 0 : revealed ? 1 : 2;
-  if (gid >= 0) {
-    pinCard(-1); uniforms.uSelected.value = gid;
-    if (revealed) { const b = building(gid); ring.position.set(b.x, 2, b.z); ring.scale.setScalar(45); ring.visible = true; showMarker(b); }
-  }
-  const st = qStore()[quest.id] || {};
-  const patch = { step: step + 1, score, marks };
-  if (step === quest.steps.length - 1) patch.best = Math.max(st.best || 0, score);
-  qSave(quest.id, patch);
-  renderQuest();
-}
-// The result: the score, a bar per answer, and a challenge to send: a link that opens this quest with the score to beat.
-function finished() {
-  const max = maxOf(quest), share = Math.round(100 * score / max);
-  const verdict = share >= 90 ? 'A true Amsterdammer.' : share >= 70 ? 'You know your way around.' : share >= 45 ? 'A good walk.' : 'Time for a walk through town.';
-  const url = `https://stop-token.com/lab/amsterdam/?quest=${quest.id}&beat=${score}${LANG === 'nl' ? '&lang=nl' : ''}`;
-  const text = LANG === 'nl'
-    ? `Ik haalde ${fmtN(score)} van de ${fmtN(max)} punten in '${L10(quest.title)}' op LAYRS: Amsterdam. Doe je beter?`
-    : `I scored ${fmtN(score)} of ${fmtN(max)} in '${L10(quest.title)}' on LAYRS: Amsterdam. Can you beat it?`;
-  const vs = rival === null ? '' : `<p class="q-vs">${score > rival ? t('You beat your friend') : score === rival ? t('A draw with your friend') : t('Your friend wins this time')}: ${fmtN(score)} – ${fmtN(rival)}</p>`;
-  questEl.className = 'quest done';
-  questEl.innerHTML = `
-    <button class="q-close" aria-label="${t('Close')}">×</button>
-    <header><b>${esc(L10(quest.title))}</b>${levelMark(quest.level)}</header>
-    <div class="q-result"><p class="q-total"><b>${fmtN(score)}</b> / ${fmtN(max)}</p><p class="q-verdict">${t(verdict)}</p>${vs}
-      <div class="q-bars" aria-hidden="true">${marks.map(m => `<i style="height:${Math.max(4, m)}%" class="${m === 100 ? 'full' : ''}"></i>`).join('')}</div></div>
-    <div class="q-actions"><button class="primary q-share">${t('Challenge a friend')}</button><button class="q-list">${t('More quests')}</button></div>
-    <p class="q-shared" hidden></p>`;
-  questEl.hidden = false;
-  ring.visible = false; pins.visible = false; marker.visible = false; setQuiz(-1, false);
-  rival = null;
-  questEl.querySelector('.q-close').onclick = closeQuest;
-  questEl.querySelector('.q-list').onclick = () => { closeQuest(); openQuests(); };
-  questEl.querySelector('.q-share').onclick = async e => {
-    const note = questEl.querySelector('.q-shared');
-    if (navigator.share && phone.matches) { try { await navigator.share({ title: 'LAYRS: Amsterdam', text, url }); return; } catch {} }
-    try { await navigator.clipboard.writeText(`${text}\n${url}`); e.target.textContent = t('Link copied'); }
-    catch { note.hidden = false; note.textContent = `${text} ${url}`; }
-  };
-}
-// Every click on the map while a find step is open.
-function questClick(gid) {
-  if (!quest || solved || gid < 0 || qStep().kind !== 'find') return;
-  const s = qStep(), targets = stepGids(s);
-  if (targets.includes(gid)) { solve(gid); return; }
-  const fb = questEl.querySelector('.q-feedback');
-  if (!fb) return;
-  const b = building(gid);
-  const d = Math.min(...targets.map(g => { const a = building(g); return Math.hypot(a.x - b.x, a.z - b.z); }));
-  let msg = d < 40 ? t('Not this one, but right next to it.') : d < 200 ? t('Not this one. Very warm.')
-    : d < 700 ? t('Not this one. A few streets away.') : t('Not this one. Far off.');
-  if (lastDist !== null && d >= 40) msg += ' ' + t(d < lastDist - 20 ? 'Warmer than before.' : d > lastDist + 20 ? 'Colder than before.' : '');
-  lastDist = d;
-  fb.textContent = msg.trim();
-  fb.className = `q-feedback ${d < 40 ? 'hot' : d < 200 ? 'warm' : 'cold'}`;
-  void fb.offsetWidth; fb.classList.add('miss');
-}
-// A tap anywhere on the ground in a "where" step: the guess, scored by its distance from the building.
-const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), caster = new THREE.Raycaster();
-function whereClick(cx, cy) {
-  const r = canvas.getBoundingClientRect(), hit = new THREE.Vector3();
-  caster.setFromCamera(new THREE.Vector2(((cx - r.left) / r.width) * 2 - 1, -((cy - r.top) / r.height) * 2 + 1), camera);
-  if (!caster.ray.intersectPlane(groundPlane, hit)) return;
-  const s = qStep(), gids = stepGids(s);
-  const near = gids.map(g => building(g)).sort((a, b) => Math.hypot(a.x - hit.x, a.z - hit.z) - Math.hypot(b.x - hit.x, b.z - hit.z))[0];
-  missed = Math.hypot(near.x - hit.x, near.z - hit.z);
-  showPins(hit.x, hit.z, near.x, near.z, missed);
-  questFly((hit.x + near.x) / 2, (hit.z + near.z) / 2, Math.min(7000, Math.max(500, missed * (phone.matches ? 4 : 2))));
-  solve(gids[0], wherePoints(missed));
-}
-addEventListener('keydown', e => { if (e.key === 'Escape' && questsDlg.open) questsDlg.close(); });
-
 // Walk shows as on while a walk is open; on a phone the timeline steps aside.
 function markWalk() {
   document.querySelector('.walks-open').setAttribute('aria-pressed', String(!!walkRoute));
   document.body.classList.toggle('walking', !!walkRoute);
 }
+
 // ---------- Walks ----------
 // Where a walk can start besides the walker's location: the city config's list, else the map's centre.
 const STARTS = config.starts || [{ en: 'Centre', nl: 'Centrum', x: 0, z: 0 }];
@@ -1897,7 +1496,6 @@ function renderPanel() {
       <div class="layers"><button class="layer view" data-view="floors"><b>${t('Storeys')}</b><span class="n">${fmt(config.stats.buildings)}</span><span class="era">${t('3D BAG')}</span></button>
       <button class="layer view" data-view="energy"><b>${t('Energy label')}</b><span class="n">${fmt(labelled)}</span><span class="era">${t('RVO')}</span></button></div>`);
     panel.querySelectorAll('.layer.view').forEach(b => b.onclick = () => setBuildingView(MODE[b.dataset.view]));
-    if (CITY === 'amsterdam') panel.insertAdjacentHTML('beforeend', `<p class="contribute"><a href="https://github.com/alexbarakov/amsterdam-by-building/blob/main/CONTRIBUTING.md" target="_blank" rel="noopener">${t('Add a layer on GitHub')}</a></p>`);
     panel.querySelectorAll('.jump button').forEach(b => b.onclick = () =>
       panel.querySelector(`#sec-${b.dataset.sec.replace(/\W+/g, '-')}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
     panel.querySelectorAll('.layer:not(.view)').forEach(b => b.onclick = () => {
@@ -2274,7 +1872,6 @@ function applyStaticText() {
   document.querySelector('.graph-open span').textContent = t('Graph');
   const gq = new URLSearchParams(location.search).get('city');  // keep a ?city the map was opened with
   document.querySelector('.graph-open').href = 'graph.html?' + new URLSearchParams({ ...(gq && { city: gq }), ...(LANG === 'nl' && { lang: 'nl' }) });
-  document.querySelector('.quests-open span').textContent = LANG === 'nl' ? 'Raadsels' : 'Quests';  // short, so the bar fits a phone
   document.querySelector('.tally-count').childNodes[1].textContent = ' ' + t('buildings');
   document.querySelector('.howto').textContent = t('Drag to turn. Right-drag or Shift-drag to move. Scroll to zoom.');
   const ld = document.getElementById('loading'); if (ld.firstChild) ld.firstChild.textContent = t('Building the city') + ' ';
@@ -2295,8 +1892,6 @@ function setLang(l) {
   const u = new URL(location.href); u.searchParams.set('lang', l); history.replaceState(null, '', u);
   applyStaticText(); renderPanel(); drawHist();
   if (pinnedGid >= 0) pinCard(pinnedGid, ...lastPin);
-  if (quest && !questEl.hidden && !questEl.classList.contains('done')) renderQuest();
-  if (questsDlg.open) renderQuestList();
   if (walksDlg.open) renderWalkPlanner();
   if (walkRoute) renderWalk();
 }
@@ -2333,4 +1928,4 @@ renderer.setAnimationLoop(now => {
 });
 
 
-window.__dbg = { loadIndex, search, choose, numbersOf, pick, uniforms, camera, controls, setLayer, layers, pinCard, showCard, building, labelGroup, labels, flyTo, startPlay, gidOf, questClick, startQuest, get quests() { return quests; } };
+window.__dbg = { loadIndex, search, choose, numbersOf, pick, uniforms, camera, controls, setLayer, layers, pinCard, showCard, building, labelGroup, labels, flyTo, startPlay, gidOf };

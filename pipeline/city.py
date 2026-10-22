@@ -1,25 +1,25 @@
-"""The city a pipeline run builds: cities/<CITY>.json, with CITY from the environment (default amsterdam).
+"""The city a pipeline run builds: cities/<CITY>.json, with CITY from the environment (pipeline/run.py sets it).
 
 Every step reads and writes under its city's own folders, so cities never overwrite each other:
   data/<city>/       raw downloads (raw/) and intermediate tables
   web/data/<city>/   what the viewer loads, opened as ?city=<city>
-Run one step with `CITY=amersfoort uv run python -m pipeline.s02_attributes`, or all of them with
-`uv run python -m pipeline.run amersfoort`.
+Run one step with `$env:CITY="amersfoort"; python -m pipeline.s02_attributes` (PowerShell), or all of them with
+`python -m pipeline.run amersfoort`.
 """
 import json
 import math
 import os
 from pathlib import Path
 
-CITY = os.environ.get("CITY", "amsterdam")
+CITY = os.environ["CITY"]
 CFG = json.loads((Path(__file__).parent.parent / "cities" / f"{CITY}.json").read_text(encoding="utf-8"))
 
 DATA = f"data/{CITY}"
 WEB = f"web/data/{CITY}"
 LABEL = CFG["label"]
-GEMEENTE_CODE = CFG["gemeentecode"]   # four digits, as BAG ids start: Amsterdam 0363, Amersfoort 0307
+GEMEENTE_CODE = CFG["gemeentecode"]   # four digits, as BAG ids start: Amersfoort 0307, Maastricht 0935
 ORIGIN = tuple(CFG["origin"])         # RD New; the viewer's (0, 0), the centre of the old town
-UA = {"User-Agent": f"layrs-{CITY}/0.1 (https://github.com/jolietjakeblues/amsterdam-by-building)"}
+UA = {"User-Agent": f"layrs-{CITY}/0.1 (https://layrs-{CITY}.pages.dev)"}
 
 Path(DATA, "raw").mkdir(parents=True, exist_ok=True)
 Path(WEB).mkdir(parents=True, exist_ok=True)

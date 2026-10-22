@@ -1,12 +1,11 @@
 """Fetch the city's national monuments from the RCE register (CC0); see rce.py for the two routes in.
 
-Writes what the Amsterdam pipeline takes from the city API and from exports, in the same shapes, so every later
-step works for any municipality:
+Writes the register's facts in the shapes the later steps read:
   raw/layers/monuments.json     [{nr, status, name, function, styles, years, panden: [BAG pand id], ...}]
   raw/rce_descriptions.csv      nr, txt: the register's description, read by monuments.py and the layers
   raw/layers/rce_styles.json    [{nr, style}]
   raw/layers/gezichten.geojson  protected townscapes overlapping the municipality, RD New
-  raw/layers/rce_actors.json    [{nr, actor, name, role}]: makers and clients, for the graph (s13_graph_rce)
+  raw/layers/rce_actors.json    [{nr, actor, name, role}]: makers and clients, for the graph (s13_graph)
 A monument's panden are the ones the register names, plus the panden of the verblijfsobjecten it names (BAG,
 raw/verblijfsobjecten.json from s00_fetch_addresses).
 """
@@ -33,6 +32,11 @@ def main():
         print("Elastic failed, falling back to SPARQL:", e)
         mons = rce.from_sparql(GEMEENTE, UA)
         print(len(mons), "rijksmonumenten from SPARQL")
+
+    unnamed = [m for m in mons if not m["name"] and m["txt"]]
+    for m in unnamed:
+        m["name"] = rce.name_from_text(m["txt"])
+    print(sum(bool(m["name"]) for m in unnamed), "names read from the descriptions")
 
     vbo_pand = json.loads(Path(f"{DATA}/raw/verblijfsobjecten.json").read_text())
     links = rce.bag_links(GEMEENTE, UA)

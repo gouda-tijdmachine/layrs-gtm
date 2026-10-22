@@ -1,176 +1,140 @@
-"""The ontology graph (web/data/graph.json): people, events and organisations linked to buildings by checked texts.
+"""The graph (web/data/<city>/graph.json): the monuments with who made them, for whom, and in what style.
 
-Texts: stories of the curated layers, 'Did you know' facts and residents' quotes. A link keeps the text as evidence,
-with its source. Residents (s09) join as people of their own. A building node carries its name and position, so the
-graph page can say where it is (buildings of one name are one place) and the map can fly there.
+The monument register is the evidence: every rijksmonument names who made it and for whom (ceo:ActorEnRol, fetched
+by s00_fetch_rce), and its style. Three kinds of point:
+  makers   architects, garden architects, sculptors, engineers, builders  (type "architect")
+  clients  the opdrachtgevers: councils, ministries, congregations, housing societies, private people  ("organisation")
+  styles   the register's architecture styles with at least STYLE_MIN monuments  ("event", relabelled)
+Places are the monuments, each with the BAG panden it stands on; a link's text quotes the register entry.
 """
 import json
-import re
+from collections import Counter, defaultdict
 from pathlib import Path
 
 import geopandas as gpd
 import pandas as pd
 
-from .s03_tiles import ORIGIN
-from .ontology import ENTITIES, ORG, PERSON
 from .city import DATA, WEB
+from .s03_tiles import ORIGIN
 
-RESIDENT_MIN_LINKS = 8
-ARCHITECT_MIN_BUILDINGS = 3  # architects of at least this many buildings with their own Wikidata item
-MAX_ARCHITECTS = 20
+STYLE_MIN = 3
+REGISTER = "https://monumentenregister.cultureelerfgoed.nl/monumenten/"
+ROLES = {  # the register's role → (English, Dutch)
+    "architect / bouwkundige / constructeur": ("architect", "architect"),
+    "tuinarchitect / landschapsarchitect": ("garden architect", "tuinarchitect"),
+    "beeldhouwer / steenhouwer / schrijnwerker": ("sculptor", "beeldhouwer"),
+    "aannemer / uitvoerder": ("builder", "aannemer"),
+    "ingenieur": ("engineer", "ingenieur"),
+    "glazenier": ("stained-glass artist", "glazenier"),
+    "keramist / plateelbakker / tegelbakker": ("ceramicist", "keramist"),
+    "opdrachtgever": ("client", "opdrachtgever"),
+}
+TYPES = [dict(key="architect", en="Makers", nl="Makers"), dict(key="organisation", en="Clients", nl="Opdrachtgevers"),
+         dict(key="event", en="Styles", nl="Bouwstijlen"), dict(key="place", en="Buildings", nl="Gebouwen")]
 
 
-def same_person(name):
-    """The ontology's person whose first and last name both appear in `name` (Eduard Cuypers is not Pierre)."""
-    words = set(re.findall(r"[\w-]+", name.lower()))
-    for e in ENTITIES:
-        parts = re.findall(r"[\w-]+", e[2].lower())
-        if e[1] not in (PERSON, "architect"):
-            continue
-        if (len(parts) > 1 and parts[0] in words and parts[-1] in words) or (len(parts) == 1 and name.lower() == parts[0]):
-            return e
-    return None
+def display(name: str) -> str:
+    """'Wamelen, A.H. van ; Stad Amersfoort' → 'A.H. van Wamelen'; an organisation keeps its name."""
+    base = name.split(" ; ")[0].strip()
+    if "," in base:
+        last, first = (s.strip() for s in base.split(",", 1))
+        return f"{first} {last}"
+    return base
+
+
+def addresses(gid_bags: set) -> dict:
+    """The main address of each pand: the lowest number on the street with most of its addresses (as s15)."""
+    per = defaultdict(set)
+    for a in json.load(open(f"{DATA}/raw/addresses.json", encoding="utf-8")):
+        if a["pandidentificatie"] in gid_bags and a["openbare_ruimte"]:
+            per[a["pandidentificatie"]].add((a["openbare_ruimte"], a["huisnummer"], a["huisletter"] or ""))
+    out = {}
+    for bag, addrs in per.items():
+        street = Counter(s for s, _, _ in addrs).most_common(1)[0][0]
+        n, letter = min((n, l) for s, n, l in addrs if s == street)
+        out[bag] = f"{street} {n}{letter}"
+    return out
 
 
 def main():
-    layers = {L["id"]: L for L in json.load(open(f"{WEB}/layers.json"))}
     b = gpd.read_parquet(f"{DATA}/buildings.parquet", columns=["identificatie", "year", "geometry"])
     b["bag"] = b.identificatie.str.slice(-16)
     c = b.geometry.centroid
     where = {k: (round(x - ORIGIN[0], 1), round(-(y - ORIGIN[1]), 1), int(yr))
              for k, x, y, yr in zip(b.bag, c.x, c.y, b.year)}
-
-    # Texts about buildings: (bag, building name, English, Dutch, source, where the text comes from)
-    texts = []
-    # Dutch stories live in the layer notes; a curated layer may be a group of a bigger one (the world layer).
-    nl_of = {(b, n["story"]): n.get("story_nl") for L in layers.values() for b, n in L.get("notes", {}).items()
-             if n.get("story")}
-    for L in json.load(open(f"{DATA}/curated.json")):
-        for e in L["entries"]:
-            texts.append((e["bag"], e["name"], e["story"], nl_of.get((e["bag"], e["story"])), e["source"],
-                          layers.get(L["id"], {}).get("title", L["title"])))
-    # A building with several names in the stories (one pand holds the Waalse Kerk and part of the Prinsenhof) shows
-    # them all; a name that only repeats another with a gloss ("Koornbeurs" / "Vleeshal (Koornbeurs)") is dropped.
-    by_bag = {}
-    for t in texts:
-        by_bag.setdefault(t[0], []).append(t[1])
-    names = {}
-    for bag, ns in by_bag.items():
-        ns = list(dict.fromkeys(ns))
-        keep = [n for n in ns if not any(m != n and (n in m or m.split(" (")[0] == n.split(" (")[0] and len(m) < len(n))
-                                         for m in ns)]
-        names[bag] = " / ".join(keep)
-    for bag, f in json.load(open(f"{WEB}/facts.json")).items():
-        texts.append((bag, names.get(bag), f["en"], f["nl"], f["source"], "Did you know"))
-
-    nodes, links = [], []
-    for eid, kind, en, nl, years, pattern in ENTITIES:
-        rx = re.compile(pattern)
-        seen = set()
-        for bag, name, story, story_nl, source, origin in texts:
-            if bag in where and rx.search(story) and (bag, story) not in seen:
-                seen.add((bag, story))
-                links.append(dict(e=eid, bag=bag, text=story, text_nl=story_nl, source=source, via=origin))
-        if seen:
-            nodes.append(dict(id=eid, type=kind, label=en, label_nl=nl, years=years))
-        else:
-            print("no building for", eid)
-    have = {n["id"] for n in nodes}
-
-    # Architects (Wikidata P84 on the building's own item): those of several well-known buildings, and any who is
-    # already an entity (De Keyser, Berlage, De Klerk). The link's evidence is the building's own article or item.
-    wiki_all = json.load(open(f"{WEB}/wiki.json"))
-    wk_all = pd.read_parquet(f"{DATA}/wiki_index.parquet")
-    designed = {}
-    for bag, k in zip(wk_all.bag, wk_all.wk):
-        for a in wiki_all[k].get("architects") or []:
-            designed.setdefault(a, {}).setdefault(k, []).append(bag)
-    have = {n["id"] for n in nodes}
-    for arch, items in sorted(designed.items()):
-        known = same_person(arch)
-        if not known and (len(items) < ARCHITECT_MIN_BUILDINGS or arch.startswith("Dienst")):
-            continue
-        aid = known[0] if known else "arch:" + re.sub(r"[^a-z0-9]+", "-", arch.lower()).strip("-")
-        if aid not in have:
-            firm = re.search(r"Architect|MVRDV|Studio|Bureau|Partners|Crouwel", arch)
-            nodes.append(dict(id=aid, type="architect", label=arch, label_nl=arch, years="",
-                              desc="architects" if firm else "architect"))
-            have.add(aid)
-        for k, bags in items.items():
-            e = wiki_all[k]
-            src = (e.get("wiki") or e.get("wiki_nl") or {}).get("url") or "https://www.wikidata.org"
-            name = e.get("label") or "this building"
-            for bag in bags:
-                if bag in where:
-                    links.append(dict(e=aid, bag=bag, text=f"{name}: designed by {arch}.",
-                                      text_nl=f"{e.get('label_nl') or name}: ontworpen door {arch}.", source=src,
-                                      via="Architects (Wikidata)"))
-    print(sum(1 for n in nodes if n.get("desc", "").startswith("architect")), "architects")
-
-    # Residents: one node per person, linked by the quote that names the address.
-    for r in json.load(open(f"{DATA}/residents.json")):
-        # Only residents known well beyond the city (Wikipedia in RESIDENT_MIN_LINKS languages or more), or one
-        # who is already an entity, so the graph stays readable.
-        if r["bag"] not in where or (r["links"] < RESIDENT_MIN_LINKS and not any(
-                [same_person(r["person"])])):
-            continue
-        # A resident who is already an entity (Vermeer, Agneta Matthes) joins that node.
-        known = same_person(r["person"])
-        rid = known[0] if known else "res:" + r["wikidata"].rsplit("/", 1)[1]
-        if not known and not any(n["id"] == rid for n in nodes):
-            years = "–".join(x for x in (r["born"], r["died"]) if x)
-            nodes.append(dict(id=rid, type=PERSON, label=r["person"], label_nl=r["person"], years=years,
-                              desc=r.get("desc"), resident=True))
-        if known and rid not in have:
-            continue
-        links.append(dict(e=rid, bag=r["bag"], text=r["quote"], text_nl=r["quote"], source=r["url"], via="Who lived here"))
-
-    # At most MAX_ARCHITECTS architects, those with the most buildings in the graph; the rest drop out with their links.
-    arch_deg = {}
-    for l in links:
-        if any(n["id"] == l["e"] and n["type"] == "architect" for n in nodes):
-            arch_deg.setdefault(l["e"], set()).add(l["bag"])
-    keep = set(sorted(arch_deg, key=lambda a: -len(arch_deg[a]))[:MAX_ARCHITECTS])
-    nodes = [n for n in nodes if n["type"] != "architect" or n["id"] in keep]
-    links = [l for l in links if l["e"] not in arch_deg or l["e"] in keep]
-
-    # Places: the buildings of one name (a hofje of eight houses, a church of two panden) become one node.
-    wiki = json.load(open(f"{WEB}/wiki.json"))
+    mons = {m["nr"]: m for m in json.load(open(f"{DATA}/raw/layers/monuments.json", encoding="utf-8"))}
+    bags_of = {nr: [p for p in m["panden"] if p in where] for nr, m in mons.items()}
+    addr = addresses({p for ps in bags_of.values() for p in ps})
+    wiki = json.load(open(f"{WEB}/wiki.json", encoding="utf-8"))
     wk = pd.read_parquet(f"{DATA}/wiki_index.parquet").set_index("bag").wk
-    addr = {}
-    for r in json.load(open(f"{DATA}/residents.json")):
-        addr.setdefault(r["bag"], r["address"] or r["person"])
-    places, place_of = {}, {}
-    for bag in sorted({l["bag"] for l in links}):
-        w = wiki[wk[bag]] if bag in wk.index else {}
-        name = names.get(bag) or (w.get("label") if w else None) or addr.get(bag) or bag
-        pid = "p:" + re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")
-        p = places.setdefault(pid, dict(name=name, bags=[], year=9999, photo=None, _xz=[]))
-        x, z, year = where[bag]
-        p["bags"].append(bag)
-        p["_xz"].append((x, z))
-        p["year"] = min(p["year"], year)
-        p["photo"] = p["photo"] or ((w.get("image") or {}).get("thumb") if w else None)
-        place_of[bag] = pid
-    for p in places.values():
-        xz = p.pop("_xz")
-        p["x"], p["z"] = round(sum(a for a, _ in xz) / len(xz), 1), round(sum(b for _, b in xz) / len(xz), 1)
-    merged = {}
-    for l in links:  # one link per entity and place; the texts of its buildings are joined
-        k = (l["e"], place_of[l["bag"]])
-        m = merged.setdefault(k, dict(e=l["e"], p=k[1], texts=[]))
-        t = dict(text=l["text"], text_nl=l["text_nl"], source=l["source"], via=l["via"])
-        if t not in m["texts"]:
-            m["texts"].append(t)
-    links = list(merged.values())
-    out = dict(nodes=nodes, places=places, links=links)
-    Path(f"{WEB}/graph.json").write_text(json.dumps(out, ensure_ascii=False, separators=(",", ":")))
-    deg = {}
-    for l in links:
-        deg.setdefault(l["e"], set()).add(l["p"])
-    print(len(nodes), "entities,", len(places), "places,", sum(len(p["bags"]) for p in places.values()), "buildings,",
+
+    # (point id, monument nr, English text, Dutch text)
+    raw, nodes = [], {}
+    roles_of = defaultdict(Counter)
+    for a in json.load(open(f"{DATA}/raw/layers/rce_actors.json", encoding="utf-8")):
+        if not bags_of.get(a["nr"]):
+            continue
+        en, nl = ROLES.get(a["role"] or "", (a["role"] or "maker", a["role"] or "maker"))
+        aid = "rce:" + a["actor"].rsplit("/", 1)[1]
+        who = display(a["name"])
+        roles_of[aid][en] += 1
+        nodes.setdefault(aid, dict(id=aid, label=who, label_nl=who, roles_nl=Counter()))["roles_nl"][nl] += 1
+        raw.append((aid, a["nr"], f"The monument register names {who} as {en}.",
+                    f"Het monumentenregister noemt {who} als {nl}."))
+    for aid, n in nodes.items():
+        top = roles_of[aid].most_common(1)[0][0]
+        n["type"] = "organisation" if top == "client" else "architect"
+        n["desc"] = ", ".join(r for r, _ in roles_of[aid].most_common())
+        n.pop("roles_nl")
+
+    styles = defaultdict(set)
+    for r in json.load(open(f"{DATA}/raw/layers/rce_styles.json", encoding="utf-8")):
+        if bags_of.get(r["nr"]):
+            styles[r["style"]].add(r["nr"])
+    for style, nrs in styles.items():
+        if len(nrs) < STYLE_MIN:
+            continue
+        sid = "style:" + "".join(ch for ch in style.lower() if ch.isalnum())
+        nodes[sid] = dict(id=sid, type="event", label=style, label_nl=style, desc="style")
+        raw += [(sid, nr, f"The monument register gives its style as {style}.",
+                 f"Het monumentenregister noemt als stijl {style}.") for nr in nrs]
+
+    places = {}
+    for nr in sorted({nr for _, nr, _, _ in raw}, key=int):
+        bags = bags_of[nr]
+        m = mons[nr]
+        photo = next(((wiki[wk[p]].get("image") or {}).get("thumb") for p in bags if p in wk.index
+                      and (wiki[wk[p]].get("image") or {}).get("thumb")), None)
+        places[f"p:rm-{nr}"] = dict(
+            name=m.get("name") or next((addr[p] for p in bags if p in addr), f"Rijksmonument {nr}"),
+            bags=bags, year=min(where[p][2] for p in bags), photo=photo,
+            x=round(sum(where[p][0] for p in bags) / len(bags), 1), z=round(sum(where[p][1] for p in bags) / len(bags), 1))
+
+    links = {}
+    for pid, nr, en, nl in raw:
+        l = links.setdefault((pid, nr), dict(e=pid, p=f"p:rm-{nr}", texts=[]))
+        t = dict(text=en, text_nl=nl, source=REGISTER + nr, via="Rijksmonumentenregister")
+        if t not in l["texts"]:
+            l["texts"].append(t)
+    # a point's years: the span of the buildings it is linked to
+    span = defaultdict(list)
+    for l in links.values():
+        span[l["e"]].append(places[l["p"]]["year"])
+    for n in nodes.values():
+        lo, hi = min(span[n["id"]]), max(span[n["id"]])
+        n["years"] = str(lo) if lo == hi else f"{lo}–{hi}"
+
+    out = dict(
+        types=TYPES,
+        intro=dict(title="Makers, clients and styles of the monuments", title_nl="Makers, opdrachtgevers en stijlen van de monumenten",
+                   lede="Every line is an entry in the national monument register. Pick one or more points, then open them on the map.",
+                   lede_nl="Elke lijn is een vermelding in het rijksmonumentenregister. Kies een of meer punten en open ze op de kaart."),
+        nodes=list(nodes.values()), places=places, links=list(links.values()))
+    Path(f"{WEB}/graph.json").write_text(json.dumps(out, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
+    deg = Counter(l["e"] for l in links.values())
+    print(len(nodes), "points,", len(places), "monuments,", sum(len(p["bags"]) for p in places.values()), "buildings,",
           len(links), "links")
-    print(sorted(((len(v), k) for k, v in deg.items()), reverse=True)[:15])
+    print([(nodes[k]["label"], v) for k, v in deg.most_common(12)])
 
 
 if __name__ == "__main__":

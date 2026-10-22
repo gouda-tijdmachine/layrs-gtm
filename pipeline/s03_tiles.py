@@ -1,6 +1,6 @@
 """Pack buildings into 600 m binary tiles + a city config JSON.
 
-Local frame: metres from the city's origin (cities/<city>.json; the Dam for Amsterdam), x east, z south (three.js, y up).
+Local frame: metres from the city's origin (cities/<city>.json), x east, z south (three.js, y up).
 Tile layout (little-endian, every section 4-byte aligned):
   header  u32 magic, nB, nP, nR, nV; f32 originX, originZ
   B       u32 gid[nB]; i16 year[nB]; u8 flag[nB]; u8 period[nB]; u8 floors[nB]; u8 energy[nB] (0 none, 1 G … 12 A+++++);
@@ -177,7 +177,7 @@ def main():
     for p, y in zip(b.period, years):
         hist.setdefault(int(y), [0] * len(PERIODS))[p] += 1
     config = dict(
-        city=CITY, label=LABEL, tileSize=TILE, origin=ORIGIN, features=CFG.get("features", {}),
+        city=CITY, label=LABEL, tileSize=TILE, origin=ORIGIN,
         # where the buildings came from: 3D BAG, or the 3D Basisvoorziening without roof shapes (s01_load)
         buildingSource="3dbag" if any(Path(f"{DATA}/raw/3dbag").glob("*.gpkg")) else "3dbv",
         # where a walk can start, besides the walker's own location
@@ -197,6 +197,11 @@ def main():
                    floorsBag3d=int((b.floors_src == 0).sum()), floorsHeight=int((b.floors_src == 1).sum())),
     )
     (OUT / "city.json").write_text(json.dumps(config, ensure_ascii=False, separators=(",", ":")).replace('"from_"', '"from"'))
+    # every city built so far, for a viewer opened without ?city=
+    built = sorted(f.parent for f in OUT.parent.glob("*/city.json"))
+    (OUT.parent / "cities.json").write_text(json.dumps(
+        [dict(city=d.name, label=json.loads((d / "city.json").read_text(encoding="utf-8"))["label"]) for d in built],
+        ensure_ascii=False), encoding="utf-8")
     total = sum(t["bytes"] for t in index)
     print(f"{len(index)} tiles, {total/1e6:.1f} MB, attrs {attrs.nbytes/1e6:.1f} MB")
 

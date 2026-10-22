@@ -1,5 +1,6 @@
 """Energy labels per building (RVO via RIVM Atlas Leefomgeving, public domain), the city's panden only."""
 import json
+import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
@@ -11,11 +12,19 @@ PAGE = 1000  # the WFS returns at most 1,000 features per request
 
 
 def page(start):
-    r = requests.get(WFS, timeout=300, params={
-        "service": "WFS", "version": "2.0.0", "request": "GetFeature", "typeNames": "nl:rvo_energielabels",
-        "outputFormat": "application/json", "propertyName": "identificatie,dominant_label,aant_labels",
-        "CQL_FILTER": f"identificatie LIKE '{GEMEENTE_CODE}%'", "sortBy": "identificatie", "count": PAGE, "startIndex": start})
-    return [f["properties"] for f in r.json()["features"]]
+    # the server drops a connection now and then: try a page a few times before giving up
+    for attempt in range(5):
+        try:
+            r = requests.get(WFS, timeout=300, params={
+                "service": "WFS", "version": "2.0.0", "request": "GetFeature", "typeNames": "nl:rvo_energielabels",
+                "outputFormat": "application/json", "propertyName": "identificatie,dominant_label,aant_labels",
+                "CQL_FILTER": f"identificatie LIKE '{GEMEENTE_CODE}%'", "sortBy": "identificatie", "count": PAGE,
+                "startIndex": start})
+            return [f["properties"] for f in r.json()["features"]]
+        except (requests.RequestException, ValueError):
+            if attempt == 4:
+                raise
+            time.sleep(5 * (attempt + 1))
 
 
 def main():

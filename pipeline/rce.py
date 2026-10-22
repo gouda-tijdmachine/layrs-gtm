@@ -21,6 +21,7 @@ What the endpoint teaches:
 - Spatial filters (geof:sfWithin) time out: protected townscapes come as WKT (WGS84) and are cut locally.
 - Heavy queries answer 504: one kind of fact per query, paged with LIMIT/OFFSET.
 """
+import re
 import time
 
 import requests
@@ -37,6 +38,38 @@ PAND = "http://bag.basisregistraties.overheid.nl/bag/id/pand/"
 VBO = "http://bag.basisregistraties.overheid.nl/bag/id/verblijfsobject/"
 RIJKSMONUMENT = "https://data.cultureelerfgoed.nl/term/id/rn/2/b2d9a59a-fe1e-4552-9a05-3c2acddff864"
 OMSCHRIJVING = "https://data.cultureelerfgoed.nl/term/id/rn/2/0273a12d-7259-4391-aee2-5dac264aebe9"
+
+
+GENERIC = {"huis", "pand", "woonhuis", "winkelhuis", "hoekhuis", "hoek", "dubbel", "boerderij", "woning", "woningen",
+           "pakhuis", "inleiding", "omschrijving", "gepleisterd", "terrein", "groep", "twee", "drie", "pomp", "nederige",
+           "eenvoudig", "eenvoudige", "klein", "kleine", "groot", "grote", "fragment", "restant", "gedeelte", "onderdeel",
+           "regentenkamer", "toegangspoort", "het", "de", "een", "werkplaats"}
+LANDMARK = r"(toren|poort|kerk|kapel|klooster|gasthuis|molen|kasteel|brug|hofje|huisje|burcht|waag|synagoge|kazerne)$"
+
+
+def name_from_text(txt: str) -> str | None:
+    """A name for a monument the register leaves unnamed, read from its description, or None.
+
+    Two forms are trusted: a type in capitals with a quoted name (VILLA "Klein Groenesteijn" → Villa Klein
+    Groenesteijn), and a short proper name as the first sentence ("O.L.Vrouwetoren. Oorspronkelijk ..."). A first
+    sentence that only describes ("Huis met lijstgevel") has no capitals inside and no landmark ending, and is left.
+    """
+    head = txt[:300]
+    m = re.search(r"\b([A-Z]{4,}(?:[- ][A-Z]{2,})*)\b[^.\"'“‘]{0,40}?[\"“'‘]([A-Z][^\"”'’]{2,40})[\"”'’]", head)
+    if m:
+        return f"{m.group(1).capitalize()} {m.group(2).strip()}"
+    # the first sentence, not ending at an abbreviation (St., Ned., Herv., R.K.)
+    first = re.split(r"(?<!\bSt)(?<!\bNed)(?<!\bZgn)(?<!\bHerv)(?<!\bK)(?<!\bL)[.,;:]\s|\s\(", head, maxsplit=1)[0]
+    first = first.strip().rstrip(".")
+    words = first.split()
+    if not words:
+        return None
+    if words[0].isupper():
+        first = words[0].capitalize() + first[len(words[0]):]
+    if (len(words) <= 4 and len(first) <= 40 and words[0].lower() not in GENERIC
+            and (re.search(r"[A-Z]", first[1:]) or re.search(LANDMARK, first.lower()))):
+        return first
+    return None
 
 
 def monument(nr, name=None, function=None, styles=(), years=None, txt=None, vbos=(), panden=()):

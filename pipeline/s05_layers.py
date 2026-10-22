@@ -6,11 +6,9 @@ import geopandas as gpd
 import numpy as np
 import pandas as pd
 
-from .i18n_nl import NL
+from .city import DATA, WEB
 from .layers import LAYERS
-from . import layers_rce  # noqa: F401 (registers the "rce" set)
 from .s03_tiles import ORIGIN
-from .city import CFG, DATA, WEB
 
 
 def main():
@@ -20,7 +18,7 @@ def main():
     bag = b.identificatie.str.slice(-16)
     mask = np.zeros(len(b), dtype=np.uint64)
     catalogue, bit = [], 0
-    for L in [L for L in LAYERS if L["set"] in CFG["layers"]]:
+    for L in LAYERS:
         members = L["source_fn"]()
         # A source returns {pand: group} or {pand: (group, note)}; notes carry the story behind a building.
         # ... or {pand: [(group, note), ...]} when a building belongs to several groups of the layer.
@@ -42,7 +40,7 @@ def main():
                                **({"label_nl": label_nl[0]} if label_nl else {})))
             bit += 1
         assert bit <= 64, "out of layer bits"
-        meta = {k: v for k, v in L.items() if k not in ("source_fn", "groups", "source", "set")}
+        meta = {k: v for k, v in L.items() if k not in ("source_fn", "groups", "source")}
         in_city = set(bag)
         meta.update(source=dict(label=L["source"][0], url=L["source"][1]), groups=groups,
                     count=sum(g["count"] for g in groups),
@@ -53,27 +51,7 @@ def main():
                         "lay0": (mask & np.uint64(0xFFFFFFFF)).astype(np.uint32),
                         "lay1": (mask >> np.uint64(32)).astype(np.uint32)})
     out.to_parquet(f"{DATA}/layers.parquet")
-    # Dutch next to English for every text the dictionary knows; list the rest so they get translated.
-    missing = set()
-    def nl(obj, *keys):
-        for k in keys:
-            v = obj.get(k)
-            if v and f"{k}_nl" not in obj:
-                if v in NL:
-                    obj[f"{k}_nl"] = NL[v]
-                else:
-                    missing.add(v)
-    for L in catalogue:
-        nl(L, "section", "title", "era", "text", "caveat")
-        nl(L["source"], "label")
-        for g in L["groups"]:
-            nl(g, "label")
-        for n in L.get("notes", {}).values():
-            if n.get("source") or n.get("name") and "people" not in n:
-                nl(n, "name", "story")
-    if missing:
-        print(f"{len(missing)} texts without Dutch:", *sorted(missing)[:10], sep="\n  ")
-    Path(f"{WEB}/layers.json").write_text(json.dumps(catalogue, ensure_ascii=False, indent=1))
+    Path(f"{WEB}/layers.json").write_text(json.dumps(catalogue, ensure_ascii=False, indent=1), encoding="utf-8")
 
 
 if __name__ == "__main__":

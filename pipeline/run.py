@@ -1,8 +1,8 @@
 """Run a city's pipeline: the steps listed in cities/<city>.json, in order, each as its own process.
 
-  uv run python -m pipeline.run amersfoort                 every step
-  uv run python -m pipeline.run amersfoort s05 s03         only these steps (by prefix)
-  uv run python -m pipeline.run amersfoort --from s02      from a step on
+  python -m pipeline.run amersfoort                 every step
+  python -m pipeline.run amersfoort s05 s03         only these steps (by prefix)
+  python -m pipeline.run amersfoort --from s02      from a step on
 """
 import json
 import os
