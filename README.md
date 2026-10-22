@@ -39,7 +39,7 @@ main streets to label from afar, and the pipeline steps. The pipeline reads and 
 | `s13_graph` | | makers, clients, complexes and styles of the monuments, linked to their buildings; architects with their Wikipedia article |
 | `s14_search`, `s15_addresses` | | search index, an address per building |
 | `s16_register` | | the register's entry per monument for the building card: text, complex, RCE photos |
-| `s00_fetch_archeo`, `s17_archeo` | RCE Elastic projection and Referentienetwerk (ABR) | archaeology mode (optional, Amersfoort): research areas under the city, one layer per ABR period, the deeper the older; archeologische complexen, grondsporen, vondsten; protected sites; a graph of ABR terms |
+| `s00_fetch_archeo`, `s17_archeo` | RCE Elastic projection and Referentienetwerk (ABR) | archaeology mode (optional: Amersfoort, Gouda): research areas under the city, one layer per ABR period, the deeper the older; archeologische complexen, grondsporen, vondsten; protected sites; a graph of ABR terms |
 
 ## Run it
 
@@ -65,7 +65,10 @@ with `wikipedia` (`{"nl": ..., "en": ...}`). See [CONTRIBUTING.md](CONTRIBUTING.
 ## Gouda
 
 [`cities/gouda.json`](cities/gouda.json) is configuration only, like the other cities. Its periods and main streets
-are a first draft, still to be checked by the Gouda Tijdmachine. Gouda is not on Cloudflare Pages: the pipeline runs
+are a first draft, still to be checked by the Gouda Tijdmachine. It runs the archaeology steps: 342 public research
+areas, 98 of them with dated finds; Gouda has no archaeological rijksmonumenten, so there is no `terrains.bin` (the
+viewer's request for it gets a harmless 404), and its investigations are small, so the archaeology graph
+(`GRAPH_MIN_OBJECTS = 40` in `s17_archeo`) shows only 5 areas. Gouda is not on Cloudflare Pages: the pipeline runs
 on the Gouda Tijdmachine's server in a virtual environment, and Apache serves the built site through a symlink:
 
 ```bash
