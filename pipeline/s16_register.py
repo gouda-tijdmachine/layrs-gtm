@@ -1,7 +1,8 @@
 """The register's entry for each monument, for the building card (web/data/<city>/register/<k>.json).
 
 Shards keyed by the monument number modulo SHARDS, loaded when a card needs one:
-  {nr: {name, text, url, complex: {name, url} | null, photos: [{src, desc, rights, page}]}}
+  {nr: {name, text, url, cho, complex: {name, url, cho} | null, photos: [{src, desc, rights, page}]}}
+url is the entry in the monument register, cho the object's URI in the RCE linked data.
 text is the register's description, cut at TEXT_MAX characters on a sentence; the card links to the full entry.
 Photos come from the RCE image bank (s00_fetch_rce), mostly CC BY 4.0, each with its page in the bank.
 """
@@ -34,8 +35,8 @@ def main():
         c = cx.get(m.get("complex"))
         shards[int(m["nr"]) % SHARDS][m["nr"]] = dict(
             name=m.get("name"), text=cut(m.get("txt")),
-            url=f"https://monumentenregister.cultureelerfgoed.nl/monumenten/{m['nr']}",
-            complex=dict(name=c["name"], url=c["url"]) if c else None,
+            url=f"https://monumentenregister.cultureelerfgoed.nl/monumenten/{m['nr']}", cho=m.get("cho"),
+            complex=dict(name=c["name"], url=c["url"], cho=c["id"]) if c else None,
             photos=photos.get(m["nr"], []))
     OUT.mkdir(parents=True, exist_ok=True)
     for f in OUT.glob("*.json"):

@@ -201,7 +201,8 @@ for (const p of periods) if (p.label_nl) NL_UI[p.label] = p.label_nl;
 Object.assign(NL_UI, {
   'Protected townscapes': 'Beschermde gezichten', 'From the register': 'Uit het register',
   'Part of the complex': 'Onderdeel van het complex', 'Read the full entry': 'Lees de hele beschrijving in het register',
-  'RCE image bank': 'Beeldbank RCE', 'rights reserved': 'rechten voorbehouden', 'About the city': 'Over de stad',
+  'RCE image bank': 'Beeldbank RCE', 'Linked Data Voorziening': 'Linked Data Voorziening', 'In the Linked Data Voorziening': 'In de Linked Data Voorziening',
+  'View in the Rijksmonumentenregister': 'Bekijk in het Rijksmonumentenregister', 'rights reserved': 'rechten voorbehouden', 'About the city': 'Over de stad',
 });
 document.querySelector('.masthead h1').childNodes[1].textContent = config.label;
 // The about text, written from the city's own numbers and sources.
@@ -835,12 +836,19 @@ function cardHtml(gid, pinned) {
   const w = b.wk >= 0 ? wiki[b.wk] : null;
   const im = w?.image?.thumb ? w.image : null;
   const period = periodOf(b.year);
+  const reg = b.mon ? registerOf(b.mon, () => refreshCard(gid)) : null;
+  // The monument register is where a reader goes; the same monument in the RCE's Linked Data Voorziening is shown
+  // by its own URI, named as such, for whoever works with the data.
+  const choId = reg?.cho?.split('/').pop();
+  const ldvLink = reg?.cho && link(reg.cho, `${t('Linked Data Voorziening')} (CHO ${choId})`);
   const facts = [
     [t('Height'), `${b.height.toFixed(1)} m`],
     [t('Storeys'), b.fsrc === 0 ? t('from the 3D BAG model') : t('height ÷ 3.2 m')],
     w?.architects?.length && [t(w.architects.length > 1 ? 'Architects' : 'Architect'), w.architects.map(esc).join(', ')],
     w?.styles?.length && [t('Style'), w.styles.map(esc).join(', ')],
-    b.mon && [t('National monument'), `${LANG === 'nl' ? 'nr.' : 'no.'} ${b.mon}`],
+    b.mon && [t('National monument'), pinned ? link(`https://monumentenregister.cultureelerfgoed.nl/monumenten/${b.mon}`, `${LANG === 'nl' ? 'nr.' : 'no.'} ${b.mon}`)
+      : `${LANG === 'nl' ? 'nr.' : 'no.'} ${b.mon}`],
+    reg?.cho && [t('Linked Data Voorziening'), pinned ? link(reg.cho, `CHO ${choId}`) : `CHO ${choId}`],
     b.energy && [t('Energy label'), `<span class="elabel" style="background:${ENERGY_COLORS[b.energy]}">${config.energy.labels[b.energy - 1]}</span>`],
   ].filter(Boolean);
   const credit = im && (pinned
@@ -849,6 +857,7 @@ function cardHtml(gid, pinned) {
   const sources = [
     wikiOf(w)?.url && link(wikiOf(w).url, t(wikiOf(w).lang === 'nl' ? 'Dutch Wikipedia' : 'Wikipedia')),
     b.mon && link(`https://monumentenregister.cultureelerfgoed.nl/monumenten/${b.mon}`, t('Monument register')),
+    ldvLink,
     link(`https://bagviewer.kadaster.nl/lvbag/bag-viewer/?objectId=${b.bag}`, t('BAG register')),
     link(googleMapsUrl(b, addressOf(b.gid, () => {})), 'Google Maps'),
   ].filter(Boolean);
@@ -857,10 +866,12 @@ function cardHtml(gid, pinned) {
     return `<li><i style="background:${groupColor(g)}"></i><div><b>${esc(tr(g.layer, 'title'))}</b> <span>${esc(tr(g, 'label'))}</span>
       ${pinned && note ? `<p>${esc(tr(note, 'story'))}${note.source ? ` ${link(note.source, t('Source'))}` : ''}</p>` : ''}</div></li>`;
   }).join('');
-  const reg = b.mon ? registerOf(b.mon, () => refreshCard(gid)) : null;
   const regHtml = pinned && reg?.text ? `<section class="register"><h4>${t('From the register')}</h4>
-      ${reg.complex ? `<p class="why">${t('Part of the complex')} ${link(reg.complex.url, reg.complex.name || '')}</p>` : ''}
-      <p class="extract" lang="nl">${esc(reg.text)}</p><p>${link(reg.url, t('Read the full entry'))}</p></section>` : '';
+      ${reg.complex ? `<p class="why">${t('Part of the complex')} ${link(reg.complex.url, reg.complex.name || '')}${
+        reg.complex.cho ? ` · ${link(reg.complex.cho, `${t('Linked Data Voorziening')} (CHO ${reg.complex.cho.split('/').pop()})`)}` : ''}</p>` : ''}
+      <p class="extract" lang="nl">${esc(reg.text)}</p>
+      <p class="reg-main">${link(reg.url, `${t('View in the Rijksmonumentenregister')} (${LANG === 'nl' ? 'nr.' : 'no.'} ${b.mon})`)}</p>
+      ${reg.cho ? `<p class="ldv">${t('In the Linked Data Voorziening')}: ${link(reg.cho, reg.cho)}</p>` : ''}</section>` : '';
   const dating = b.orig !== b.year ? `${t(DATE_NOTE[b.flag] || '')} ${t('BAG gives')} ${b.orig}.` : (DATE_NOTE[b.flag] && t(DATE_NOTE[b.flag]));
   return `
     ${pinned ? '<button class="card-close" aria-label="Close">×</button>' : ''}
