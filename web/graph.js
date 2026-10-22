@@ -13,7 +13,7 @@ const NL = {
   'hint': 'Vierkantjes zijn gebouwen. Klik op een punt om het te kiezen; klik op meer om ze toe te voegen.',
   'Find a name': 'Zoek een naam', 'Clear': 'Wissen', 'Source': 'Bron',
   'Show {n} buildings on the map': 'Toon {n} gebouwen op de kaart', 'Show 1 building on the map': 'Toon 1 gebouw op de kaart',
-  '{n} places': '{n} plekken', '1 place': '1 plek', 'Linked to': 'Verbonden met', 'Monument register': 'Monumentenregister',
+  '{n} places': '{n} plekken', '1 place': '1 plek', 'Linked to': 'Verbonden met', 'Monument register': 'Monumentenregister', 'Referentienetwerk': 'Referentienetwerk', 'Linked Data Voorziening': 'Linked Data Voorziening',
 };
 let LANG = (() => {
   const q = new URLSearchParams(location.search).get('lang');
@@ -33,10 +33,13 @@ const SEL_COLORS = ['#ec0000', '#1f4e8c', '#d99a12', '#2e8b57', '#7b3fa0', '#009
 
 // The city comes from ?city=<name>, else from the page's data-city, else it is the first one built, as on the map;
 // links keep a ?city they were given.
+// ?mode=archeo is the archaeology graph (pipeline/s17_archeo.py), whose points open on the map under the ground.
 const CITY_Q = new URLSearchParams(location.search).get('city');
-const withCity = u => { if (CITY_Q) u.searchParams.set('city', CITY_Q); return u; };
+const ARCHEO = new URLSearchParams(location.search).get('mode') === 'archeo';
+const withCity = u => { if (CITY_Q) u.searchParams.set('city', CITY_Q); if (ARCHEO) u.searchParams.set('mode', 'archeo'); return u; };
 Promise.resolve(CITY_Q || document.documentElement.dataset.city || fetch('data/cities.json').then(r => r.json()).then(c => c[0].city))
-  .then(CITY => Promise.all([fetch(`data/${CITY}/graph.json`).then(r => r.json()), fetch(`data/${CITY}/city.json`).then(r => r.json())]))
+  .then(CITY => Promise.all([fetch(`data/${CITY}/${ARCHEO ? 'archeo/' : ''}graph.json`).then(r => r.json()),
+    fetch(`data/${CITY}/city.json`).then(r => r.json())]))
   .then(([G, city]) => init(G, city));
 
 function init(G, city) {
@@ -205,7 +208,7 @@ function init(G, city) {
       const n = byId.get(id);
       if (n.kind === 'place') {
         const ents = [...nbrs.get(id)].map(e => byId.get(e));
-        return `<h2>${esc(n.name)} <small>${n.year}</small></h2>
+        return `<h2>${esc(n.name)} <small>${n.year}</small></h2>${n.url ? `<p class="g-lede">${t('Linked Data Voorziening')}: <a href="${esc(n.url)}" target="_blank" rel="noopener">${esc(n.url)}</a></p>` : ''}
           <p class="g-lede">${t('Linked to')}: ${ents.map(e => `<button class="g-link" data-id="${e.id}">${esc(label(e))}</button>`).join(', ')}</p>`;
       }
       const places = [...nbrs.get(id)].map(p => byId.get(p));
@@ -217,7 +220,8 @@ function init(G, city) {
       }).join('');
       // a point's own page: its Wikipedia article, Wikidata item or entry in the register
       const page = n.url && `<p class="g-lede"><a href="${esc(n.url)}" target="_blank" rel="noopener">${
-        /wikipedia/.test(n.url) ? 'Wikipedia' : /wikidata/.test(n.url) ? 'Wikidata' : t('Monument register')}</a></p>`;
+        /wikipedia/.test(n.url) ? 'Wikipedia' : /wikidata/.test(n.url) ? 'Wikidata'
+          : /term\/id/.test(n.url) ? `${t('Referentienetwerk')}: ${esc(n.url)}` : t('Monument register')}</a></p>`;
       return `<h2>${esc(label(n))} <small>${esc(n.years || '')} · ${t(places.length === 1 ? '1 place' : '{n} places', places.length)}</small></h2>${page || ''}<ul>${items}</ul>`;
     }).join('');
     box.querySelectorAll('[data-id]').forEach(b => b.onclick = () => toggle(b.dataset.id));

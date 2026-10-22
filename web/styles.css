@@ -72,6 +72,22 @@ h1 { margin: 0; font-size: clamp(34px, 4.4vw, 56px); font-weight: 800; letter-sp
   display: inline-flex; align-items: center; gap: 7px; border: 0; background: var(--paper); border-radius: 999px;
   padding: 5px 11px; cursor: pointer; font: inherit; font-size: 12px; font-weight: 600; color: var(--muted); }
 .gz-toggle[hidden] { display: none; }
+/* Archaeology: the switch that turns the city over, and what the page hides while it is under the ground. */
+.arch-toggle { position: fixed; right: var(--gutter); top: calc(env(safe-area-inset-top, 0px) + var(--gutter) + 160px);
+  display: inline-flex; align-items: center; gap: 7px; border: 0; background: var(--paper); border-radius: 999px;
+  padding: 5px 11px; cursor: pointer; font: inherit; font-size: 12px; font-weight: 600; color: var(--ink); }
+.arch-toggle[hidden] { display: none; }
+.arch-toggle i { width: 12px; height: 12px; border-radius: 2px;
+  background: linear-gradient(#c49a62 0 33%, #a8703a 33% 66%, #344a63 66%); }
+.arch-toggle[aria-pressed="true"] { background: var(--ink); color: var(--paper); }
+body.archeo .timeline, body.archeo .find, body.archeo .gz-toggle, body.archeo .howto,
+body.archeo .modes button[data-mode], body.archeo .modes .walks-open, body.archeo .modes-sep { display: none !important; }
+body.archeo .masthead, body.archeo .tally { color: #f3eee6; }
+body.archeo .veil { display: none; }
+.arch-card .terms { list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 4px 10px; font-size: 12px; }
+.arch-card .terms a { color: inherit; }
+.arch-card .terms small { color: var(--muted); }
+.arch-card .ldv a { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 11px; word-break: break-all; }
 .gz-toggle i { width: 12px; height: 12px; border-radius: 3px; border: 2px solid #c8102e; background: transparent; }
 .gz-toggle[aria-pressed="true"] { color: var(--ink); }
 .gz-toggle[aria-pressed="true"] i { background: rgba(200, 16, 46, 0.25); }
@@ -207,6 +223,7 @@ h1 { margin: 0; font-size: clamp(34px, 4.4vw, 56px); font-weight: 800; letter-sp
   .masthead, .tally { top: calc(env(safe-area-inset-top, 0px) + 14px); }
   .lang { top: calc(env(safe-area-inset-top, 0px) + 66px); }
   .gz-toggle { top: calc(env(safe-area-inset-top, 0px) + 100px); }
+  .arch-toggle { top: calc(env(safe-area-inset-top, 0px) + 134px); }
   .sibling { top: calc(env(safe-area-inset-top, 0px) + 98px); }
   /* Modes: one scrolling strip above the timeline. */
   .modes { top: auto; left: 12px; right: 12px; transform: none; bottom: calc(env(safe-area-inset-bottom, 0px) + 100px);

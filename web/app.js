@@ -201,6 +201,17 @@ for (const p of periods) if (p.label_nl) NL_UI[p.label] = p.label_nl;
 Object.assign(NL_UI, {
   'Protected townscapes': 'Beschermde gezichten', 'From the register': 'Uit het register',
   'Part of the complex': 'Onderdeel van het complex', 'Read the full entry': 'Lees de hele beschrijving in het register',
+  'Archaeology': 'Archeologie', 'Under the ground': 'Onder de grond', 'Underground': 'Ondergrond',
+  'research areas': 'onderzoeksgebieden', 'Research area': 'Onderzoeksgebied', 'registered': 'geregistreerd',
+  'Periods found here': 'Perioden die hier gevonden zijn', 'Archaeological complexes': 'Archeologische complexen',
+  'Features': 'Grondsporen', 'Finds': 'Vondsten', 'Materials': 'Materialen', 'Find spots': 'Vindplaatsen',
+  'Find spot': 'Vindplaats', 'Archaeological monument': 'Archeologisch monument', 'Loading…': 'Laden…',
+  'Archaeological national monument': 'Archeologisch rijksmonument', 'Archaeological national monuments': 'Archeologische rijksmonumenten',
+  'Terms from the Referentienetwerk (ABR); only public records.': 'Begrippen uit het Referentienetwerk (ABR); alleen openbare gegevens.',
+  'Every surface is a research area, once for each period its finds and features date from: the deeper, the older.':
+    'Elk vlak is een onderzoeksgebied, één keer voor elke periode waaruit de vondsten en grondsporen dateren: hoe dieper, hoe ouder.',
+  'Click a period to see it alone; click a surface for what was found there. Periods and terms from the Referentienetwerk (ABR), records from the RCE Linked Data Voorziening; only what is public.':
+    'Klik op een periode om alleen die te zien; klik op een vlak voor wat er gevonden is. Perioden en begrippen uit het Referentienetwerk (ABR), gegevens uit de Linked Data Voorziening van de RCE; alleen wat openbaar is.',
   'RCE image bank': 'Beeldbank RCE', 'Linked Data Voorziening': 'Linked Data Voorziening', 'In the Linked Data Voorziening': 'In de Linked Data Voorziening',
   'View in the Rijksmonumentenregister': 'Bekijk in het Rijksmonumentenregister', 'rights reserved': 'rechten voorbehouden', 'About the city': 'Over de stad',
 });
@@ -323,6 +334,246 @@ gzBtn.onclick = () => {
   gzBtn.setAttribute('aria-pressed', String(townscapes.visible));
 };
 
+// ---------- Archaeology ----------
+// A second city under the first (pipeline/s17_archeo.py). The toggle turns the map over: the camera swings through
+// the ground to look up at the city from below, the buildings fade to a pale maquette and the ground turns to glass.
+// Under it every research area (onderzoeksgebied) lies once for each archaeological period its finds and features
+// date from, the deeper the older: ten periods of the ABR, from Recent down to the Palaeolithic. Depth stands for
+// time, not for metres below the surface. Only what the RCE marks as public is there.
+const ARCH_DEPTH = 28;          // metres between two periods' layers
+const ARCH_CENTRE = -ARCH_DEPTH * 3;
+const UNDERGROUND = '#2a2621';
+const ARCH = { on: false, data: null, meshes: [], edges: [], mask: [], focus: null, terrains: null };
+const archGroup = new THREE.Group();
+archGroup.visible = false;
+scene.add(archGroup);
+const archBtn = document.querySelector('.arch-toggle');
+if (config.archeology) archBtn.hidden = false;
+archBtn.onclick = () => setArcheo(!ARCH.on);
+
+// The polygons of a file in s04_water's format, one THREE.Shape each, in file order.
+function shapesOf(buf) {
+  const [nPoly, nRing, nVert] = new Uint32Array(buf, 0, 3);
+  const ringStart = new Uint32Array(buf, 12, nPoly + 1);
+  const vertStart = new Uint32Array(buf, 12 + 4 * (nPoly + 1), nRing + 1);
+  const xz = new Float32Array(buf, 12 + 4 * (nPoly + 1) + 4 * (nRing + 1), 2 * nVert);
+  const ring = r => {
+    const pts = [];
+    for (let v = vertStart[r]; v < vertStart[r + 1]; v++) pts.push(new THREE.Vector2(xz[2 * v], -xz[2 * v + 1]));
+    return pts;
+  };
+  const out = [];
+  for (let p = 0; p < nPoly; p++) {
+    const shape = new THREE.Shape(ring(ringStart[p]));
+    for (let r = ringStart[p] + 1; r < ringStart[p + 1]; r++) shape.holes.push(new THREE.Path(ring(r)));
+    out.push(shape);
+  }
+  return out;
+}
+// One mesh per period: the areas that hold something from it, with an edge so neighbouring areas stay apart.
+function archLayerMesh(shapes, color, opacity, y) {
+  const g = new THREE.ShapeGeometry(shapes);
+  g.rotateX(-Math.PI / 2);
+  const mesh = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color, transparent: true, opacity, side: THREE.DoubleSide, depthWrite: false }));
+  const edge = new THREE.LineSegments(new THREE.EdgesGeometry(g), new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.9 }));
+  mesh.position.y = edge.position.y = y;
+  return [mesh, edge];
+}
+let archLoading = null;
+function loadArcheo() {
+  archLoading ??= Promise.all([
+    fetch(D + 'archeo/areas.json').then(r => r.json()),
+    fetch(D + 'archeo/areas.bin').then(r => r.arrayBuffer()),
+    fetch(D + 'archeo/terrains.bin').then(r => r.ok ? r.arrayBuffer() : null).catch(() => null),
+  ]).then(([data, buf, tbuf]) => {
+    ARCH.data = data;
+    ARCH.polys = shapesOf(buf);
+    ARCH.mask = data.layers.map(() => 1);
+    data.layers.forEach((L, i) => {
+      const shapes = [], owner = [];
+      data.areas.forEach((a, k) => {
+        if (!(a.mask >> i & 1)) return;
+        for (let p = a.poly[0]; p < a.poly[0] + a.poly[1]; p++) { shapes.push(ARCH.polys[p]); owner.push(k); }
+      });
+      const [mesh, edge] = archLayerMesh(shapes, L.color, 0.6, -(i + 1) * ARCH_DEPTH);
+      mesh.userData = { layer: i, owner };
+      archGroup.add(mesh, edge);
+      ARCH.meshes.push(mesh); ARCH.edges.push(edge);
+    });
+    // The protected sites (archaeological rijksmonumenten) just under the surface, in the townscapes' red.
+    if (tbuf && data.terrains.length) {
+      const t = shapesOf(tbuf);
+      const [wash, border] = archLayerMesh(t, TOWNSCAPE, 0.35, -3);
+      wash.userData = { terrain: true, owner: data.terrains.flatMap((x, k) => Array(x.poly[1]).fill(k)) };
+      ARCH.terrains = [wash, border];
+      archGroup.add(wash, border);
+    }
+  });
+  return archLoading;
+}
+
+// Turning over: the camera swings through the ground plane to the mirror image of where it was, around a point
+// in the middle of the layers, and back.
+let flip = null;
+function setArcheo(on) {
+  if (on === ARCH.on) return;
+  ARCH.on = on;
+  archBtn.setAttribute('aria-pressed', String(on));
+  document.body.classList.toggle('archeo', on);
+  pinCard(-1);
+  if (on) loadArcheo().then(() => { archGroup.visible = ARCH.on; renderPanel(); drawHist(); });
+  else archGroup.visible = false;
+  const sph = new THREE.Spherical().setFromVector3(camera.position.clone().sub(controls.target));
+  controls.minPolarAngle = 0;
+  controls.maxPolarAngle = Math.PI * 0.97;
+  flip = { t0: performance.now(), dur: 1400, from: sph.phi, theta: sph.theta, r: sph.radius,
+    to: on ? Math.max(Math.PI * 0.6, Math.PI - sph.phi) : Math.min(Math.PI * 0.45, Math.PI - sph.phi),
+    fromY: controls.target.y, toY: on ? ARCH_CENTRE : 0,
+    done: () => { controls.minPolarAngle = on ? Math.PI * 0.55 : 0; controls.maxPolarAngle = on ? Math.PI * 0.97 : Math.PI * 0.47; } };
+  uniforms.uGhost.value = on ? 0.72 : 0;
+  for (const [m, o] of [[land, 0.28], [water, 0.35]]) {
+    m.material.transparent = on; m.material.opacity = on ? o : 1; m.material.depthWrite = !on; m.material.needsUpdate = true;
+  }
+  renderer.setClearColor(on ? UNDERGROUND : SKY);
+  uniforms.uFogColor.value = col(on ? UNDERGROUND : SKY);
+  labelGroup.visible = !on;
+  if (on) { ARCH.townscapes = townscapes.visible; townscapes.visible = false; } else townscapes.visible = !!ARCH.townscapes;
+  walkGroup.visible = !on;
+  document.querySelector('.graph-open').href = graphHref();
+  const u = new URL(location.href);
+  if (on) u.searchParams.set('mode', 'archeo'); else { u.searchParams.delete('mode'); u.searchParams.delete('focus'); }
+  history.replaceState(null, '', u);
+  if (!on) { ARCH.focus = null; archFocusMeshes(); focusEl.hidden = true; }
+  applyStaticText(); renderPanel(); drawHist();
+}
+function stepFlip(now) {
+  if (!flip) return;
+  const k = Math.min(1, (now - flip.t0) / flip.dur), e = k < 0.5 ? 2 * k * k : 1 - (-2 * k + 2) ** 2 / 2;
+  controls.target.y = flip.fromY + (flip.toY - flip.fromY) * e;
+  const off = new THREE.Vector3().setFromSpherical(new THREE.Spherical(flip.r, flip.from + (flip.to - flip.from) * e, flip.theta));
+  camera.position.copy(controls.target).add(off);
+  if (k >= 1) { const d = flip.done; flip = null; d(); }
+}
+function graphHref() {
+  const q = new URLSearchParams();
+  const cq = new URLSearchParams(location.search).get('city');
+  if (cq) q.set('city', cq);
+  if (ARCH.on) q.set('mode', 'archeo');
+  if (LANG === 'nl') q.set('lang', 'nl');
+  return 'graph.html' + (q.size ? '?' + q : '');
+}
+
+// A click under the ground: the area under the pointer, at the shallowest period showing there.
+const archRay = new THREE.Raycaster();
+function archAt(x, y) {
+  archRay.setFromCamera(new THREE.Vector2(x / innerWidth * 2 - 1, -(y / innerHeight) * 2 + 1), camera);
+  const targets = [...ARCH.meshes.filter(m => m.visible), ...(ARCH.terrains ? [ARCH.terrains[0]] : [])];
+  const hit = archRay.intersectObjects(targets, false)[0];
+  if (!hit) return null;
+  const g = hit.object.geometry.groups.find(g => hit.faceIndex * 3 >= g.start && hit.faceIndex * 3 < g.start + g.count);
+  const k = hit.object.userData.owner[g ? g.materialIndex : 0];
+  return hit.object.userData.terrain ? { terrain: k } : { area: k, layer: hit.object.userData.layer };
+}
+const termLink = ([label, uri, n]) => `<li>${uri ? link(uri, label) : esc(label)} <small>${n}</small></li>`;
+function archCardHtml(hit) {
+  const D_ = ARCH.data, ldv = uri => `<p class="ldv">${t('In the Linked Data Voorziening')}: ${link(uri, uri)}</p>`;
+  if (hit.terrain !== undefined) {
+    const s = D_.terrains[hit.terrain];
+    return `<button class="card-close" aria-label="Close">×</button>
+      <header class="card-head" style="background:${TOWNSCAPE};color:#fff"><h3>${esc(s.name || t('Archaeological monument'))}</h3>
+        <div class="when"><span class="period">${t('Archaeological national monument')}</span></div></header>
+      <section class="register"><p class="extract" lang="nl">${esc(s.txt)}</p>
+        <p class="reg-main">${link(`https://monumentenregister.cultureelerfgoed.nl/monumenten/${s.nr}`, `${t('View in the Rijksmonumentenregister')} (${LANG === 'nl' ? 'nr.' : 'no.'} ${s.nr})`)}</p>
+        ${ldv(s.cho)}</section>`;
+  }
+  const a = D_.areas[hit.area], L = D_.layers[hit.layer];
+  const name = l => LANG === 'nl' ? l.label : l.label_en;
+  const list = (title, rows) => rows.length ? `<section><h4>${title}</h4><ul class="terms">${rows.map(termLink).join('')}</ul></section>` : '';
+  const c = a.counts;
+  return `<button class="card-close" aria-label="Close">×</button>
+    <header class="card-head" style="background:${L.color};color:${inkOn(L.color)}"><h3>${esc(a.name)}</h3>
+      <p class="addr"><span>${t('Research area')} ${esc(a.nr)}${a.registered ? ` · ${t('registered')} ${a.registered}` : ''}</span></p>
+      <div class="when"><span class="y">${esc(name(L))}</span><span class="period">${esc(archYears(L))}</span></div></header>
+    <section><h4>${t('Periods found here')}</h4><ul class="terms">${D_.layers.map((l, i) => a.mask >> i & 1
+      ? `<li><i style="display:inline-block;width:9px;height:9px;border-radius:2px;background:${l.color}"></i> ${link(l.uri, name(l))}</li>` : '').join('')}</ul></section>
+    <section><dl><dt>${t('Archaeological complexes')}</dt><dd>${fmt(c.complexes)}</dd><dt>${t('Features')}</dt><dd>${fmt(c.features)}</dd>
+      <dt>${t('Finds')}</dt><dd>${fmt(c.objects)}</dd></dl></section>
+    ${list(t('Archaeological complexes'), a.complexes)}${list(t('Features'), a.features)}
+    ${list(t('Finds'), a.finds)}${list(t('Materials'), a.materials)}
+    ${a.spots.length ? `<section><h4>${t('Find spots')}</h4><ul class="terms">${a.spots.map(s =>
+      `<li>${link(s.cho, s.name || t('Find spot'))}${s.how ? ` <small>${esc(s.how.replace(/^archeologisch: /, ''))}</small>` : ''}</li>`).join('')}</ul></section>` : ''}
+    <section class="register arch-card">${ldv(a.cho)}<p class="why">${t('Terms from the Referentienetwerk (ABR); only public records.')}</p></section>`;
+}
+const archYears = L => `${L.begin < 0 ? `${-L.begin} ${LANG === 'nl' ? 'v.Chr.' : 'BC'}` : L.begin}–${L.end < 0 ? `${-L.end} ${LANG === 'nl' ? 'v.Chr.' : 'BC'}` : L.end}`;
+function archClick(x, y) {
+  const hit = archAt(x, y);
+  if (!hit) { card.hidden = true; return; }
+  card.innerHTML = archCardHtml(hit);
+  card.classList.add('pinned', 'arch-card');
+  card.hidden = false;
+  card.querySelector('.card-close').onclick = () => { card.hidden = true; card.classList.remove('arch-card'); };
+  placeCard(x, y);
+}
+function renderArcheoPanel() {
+  const D_ = ARCH.data;
+  if (!D_) { panel.innerHTML = `<h2>${t('Under the ground')}</h2><p class="note">${t('Loading…')}</p>`; return; }
+  const name = l => LANG === 'nl' ? l.label : l.label_en;
+  panel.innerHTML = `<h2>${t('Under the ground')}</h2>
+    <p class="note">${t('Every surface is a research area, once for each period its finds and features date from: the deeper, the older.')}</p>
+    <div class="swatches">${D_.layers.map((l, i) => `
+      <button class="swatch" data-i="${i}" aria-pressed="${!!ARCH.mask[i]}">
+        <i style="background:${l.color}"></i><span>${esc(name(l))} <small>${esc(archYears(l))}</small></span><span class="n">${fmt(l.count)}</span>
+      </button>`).join('')}
+      ${D_.terrains.length ? `<button class="swatch" data-t="1" aria-pressed="${ARCH.terrains?.[0].visible !== false}">
+        <i style="background:${TOWNSCAPE}"></i><span>${t('Archaeological national monuments')}</span><span class="n">${fmt(D_.terrains.length)}</span></button>` : ''}</div>
+    <p class="note">${t('Click a period to see it alone; click a surface for what was found there. Periods and terms from the Referentienetwerk (ABR), records from the RCE Linked Data Voorziening; only what is public.')}</p>`;
+  panel.querySelectorAll('.swatch[data-i]').forEach(b => b.onclick = () => {
+    const i = +b.dataset.i, m = ARCH.mask, solo = m.every((v, j) => (j === i) === !!v);
+    ARCH.mask = D_.layers.map((_, j) => (solo || j === i) ? 1 : 0);
+    ARCH.meshes.forEach((x, j) => { x.visible = ARCH.edges[j].visible = !!ARCH.mask[j]; });
+    archFocusMeshes();
+    renderPanel();
+  });
+  panel.querySelector('.swatch[data-t]')?.addEventListener('click', () => {
+    ARCH.terrains.forEach(x => { x.visible = !x.visible; });
+    renderPanel();
+  });
+}
+// From the graph: the areas of the chosen terms light up in their colours, the rest of the layers dim.
+let archFocusGroup = null;
+function archFocusMeshes() {
+  if (archFocusGroup) { archGroup.remove(archFocusGroup); archFocusGroup = null; }
+  const dim = !!ARCH.focus;
+  ARCH.meshes.forEach(m => { m.material.opacity = dim ? 0.12 : 0.6; });
+  if (!ARCH.focus) return;
+  archFocusGroup = new THREE.Group();
+  ARCH.focus.forEach(({ areas, color }) => ARCH.data.layers.forEach((L, i) => {
+    if (!ARCH.mask[i]) return;
+    const shapes = [];
+    areas.forEach(k => { const a = ARCH.data.areas[k]; if (a.mask >> i & 1) for (let p = a.poly[0]; p < a.poly[0] + a.poly[1]; p++) shapes.push(ARCH.polys[p]); });
+    if (shapes.length) archFocusGroup.add(...archLayerMesh(shapes, GROUP_COLORS[color], 0.85, -(i + 1) * ARCH_DEPTH + 0.5));
+  }));
+  archGroup.add(archFocusGroup);
+}
+async function showArcheoFocus(ids) {
+  await loadArcheo();
+  const G = await fetch(D + 'archeo/graph.json').then(r => r.json());
+  const index = new Map(ARCH.data.areas.map((a, k) => [String(a.nr), k]));
+  ARCH.focus = ids.map((id, i) => {
+    const place = G.places[id], node = G.nodes.find(n => n.id === id);
+    const nrs = place ? place.areas : G.links.filter(l => l.e === id).flatMap(l => G.places[l.p].areas);
+    return { label: place ? place.name : (LANG === 'nl' ? node?.label_nl : node?.label) || id, color: i % GROUP_COLORS.length,
+      areas: [...new Set(nrs.map(n => index.get(String(n))).filter(k => k !== undefined))] };
+  }).filter(f => f.areas.length);
+  archFocusMeshes();
+  const back = graphHref().replace('graph.html?', `graph.html?select=${encodeURIComponent(ids.join(','))}&`);
+  focusEl.innerHTML = `<header><b>${t('From the graph')}</b><button class="f-close" aria-label="${t('Close')}">×</button></header>
+    <ul>${ARCH.focus.map(f => `<li><i style="background:${GROUP_COLORS[f.color]}"></i><span>${esc(f.label)}</span><small>${f.areas.length}</small></li>`).join('')}</ul>
+    <div class="f-actions"><a class="f-back" href="${back}">${t('Back to the graph')}</a></div>`;
+  focusEl.hidden = false;
+  focusEl.querySelector('.f-close').onclick = () => { ARCH.focus = null; archFocusMeshes(); focusEl.hidden = true; };
+}
+
 // ---------- Street and canal names ----------
 // Flat on the ground, turned along the street (pipeline/s07_labels.py). Textures are drawn on first use.
 const labelData = await fetch(D + 'labels.json').then(r => r.json());
@@ -429,6 +680,7 @@ const uniforms = {
   uPick: { value: null },
   uPickOn: { value: 0 },
   uFogColor: { value: col(SKY) },
+  uGhost: { value: 0 },                            // archaeology mode: the buildings fade to a pale maquette
   uFog: { value: new THREE.Vector2(9000, 26000) },
 };
 
@@ -546,6 +798,7 @@ const FRAG = /* glsl */`
   precision highp float;
   uniform vec3 uFogColor;
   uniform vec2 uFog;
+  uniform float uGhost;
   in vec3 vColor;
   in vec3 vWorld;
   in float vGid;
@@ -562,6 +815,7 @@ const FRAG = /* glsl */`
       float foot = mix(0.82, 1.0, clamp(vWorld.y / 12.0, 0.0, 1.0));
       vec3 c = vColor * light * foot;
       float d = length(vWorld - cameraPosition);
+      c = mix(c, vec3(0.93, 0.92, 0.89), uGhost);
       c = mix(c, uFogColor, smoothstep(uFog.x, uFog.y, d));
       outColor = vec4(c, 1.0);
     #endif
@@ -943,7 +1197,7 @@ let pointer = null, dragging = false, downAt = null;
 canvas.addEventListener('pointermove', e => { pointer = [e.clientX, e.clientY]; });
 canvas.addEventListener('pointerdown', e => {
   dragging = true; downAt = [e.clientX, e.clientY];
-  if (pinnedGid < 0) card.hidden = true;
+  if (pinnedGid < 0 && !ARCH.on) card.hidden = true;
 });
 canvas.addEventListener('pointerup', e => {
   dragging = false;
@@ -953,10 +1207,11 @@ canvas.addEventListener('pointerup', e => {
     if (at) { pickingStart = false; walkPrefs.at = at; walkPrefs.atLabel = t('Point on the map'); walkEl.hidden = true; openWalks(); }
     return;
   }
+  if (ARCH.on) { archClick(e.clientX, e.clientY); return; }
   const gid = pick(e.clientX, e.clientY);
   pinCard(gid === pinnedGid ? -1 : gid, e.clientX, e.clientY);
 });
-canvas.addEventListener('pointerleave', () => { pointer = null; if (pinnedGid < 0) card.hidden = true; uniforms.uHover.value = -1; });
+canvas.addEventListener('pointerleave', () => { pointer = null; if (pinnedGid < 0 && !ARCH.on) card.hidden = true; uniforms.uHover.value = -1; });
 
 // ---------- Flying to a building ----------
 let bagIndex = null;
@@ -972,8 +1227,9 @@ function gidOf(bag) {
 let flight = null;
 function flyTo(x, z, done, distance = 520) {
   const dir = camera.position.clone().sub(controls.target).normalize();
-  if (dir.y < 0.45) { dir.y = 0.45; dir.normalize(); }
-  const target = new THREE.Vector3(x, 0, z);
+  const side = ARCH.on ? -1 : 1;
+  if (dir.y * side < 0.45) { dir.y = 0.45 * side; dir.normalize(); }
+  const target = new THREE.Vector3(x, ARCH.on ? ARCH_CENTRE : 0, z);
   flight = { t0: performance.now(), dur: 1400, fromT: controls.target.clone(), toT: target,
     fromP: camera.position.clone(), toP: target.clone().add(dir.multiplyScalar(distance)), done };
 }
@@ -1403,7 +1659,10 @@ walksDlg.addEventListener('click', e => { if (e.target === walksDlg) walksDlg.cl
 // each selection in its own colour, and the rest of the city turns into a white model.
 const focusEl = document.getElementById('focus');
 const focusIds = (new URLSearchParams(location.search).get('focus') || '').split(',').filter(Boolean);
-if (focusIds.length) fetch(D + 'graph.json').then(r => r.json()).then(G => showFocus(G, focusIds)).catch(() => {});
+// ?mode=archeo opens the map turned over, under the ground; with ?focus the graph's archaeological terms light up
+const startArcheo = config.archeology && new URLSearchParams(location.search).get('mode') === 'archeo';
+if (startArcheo) setTimeout(() => { setArcheo(true); if (focusIds.length) showArcheoFocus(focusIds); }, 600);
+else if (focusIds.length) fetch(D + 'graph.json').then(r => r.json()).then(G => showFocus(G, focusIds)).catch(() => {});
 function showFocus(G, ids) {
   const groups = [];
   ids.forEach((id, i) => {
@@ -1503,6 +1762,7 @@ const sectionIcon = sec => `<svg class="icon" viewBox="0 0 16 16" aria-hidden="t
 
 const backToLayers = () => { uniforms.uMode.value = MODE.layers; renderPanel(); drawHist(); };
 function renderPanel() {
+  if (ARCH.on) { renderArcheoPanel(); return; }
   const mode = uniforms.uMode.value;
   if (mode === MODE.period) {
     panel.innerHTML = `<h2>${t('Built in')}</h2><div class="swatches">${periods.map((p, i) => `
@@ -1731,8 +1991,8 @@ function drawHist() {
   hctx.fillRect(xOf(Y) - 1, 0, 2, plotH);
   if (Yf >= T0) { hctx.fillStyle = '#5d6266'; hctx.fillRect(xOf(Yf) - 0.5, 0, 1, plotH); }
   // at the end of the timeline the map shows the city as it stands, not a year that reads like a date
-  document.getElementById('year').textContent = Y >= config.yearMax ? t('Today') : Math.round(Y);
-  document.getElementById('count').textContent = fmt(visibleCount());
+  document.getElementById('year').textContent = ARCH.on ? t('Underground') : Y >= config.yearMax ? t('Today') : Math.round(Y);
+  document.getElementById('count').textContent = fmt(ARCH.on ? ARCH.data?.areas.length || 0 : visibleCount());
 }
 
 let handle = null;
@@ -1944,9 +2204,9 @@ function applyStaticText() {
   document.querySelectorAll('[data-lang-block]').forEach(a => { a.hidden = a.dataset.langBlock !== LANG; });
   document.querySelectorAll('.modes button[data-mode]').forEach(b => { b.textContent = t(b.dataset.label); });
   document.querySelector('.graph-open span').textContent = t('Graph');
-  const gq = new URLSearchParams(location.search).get('city');  // keep a ?city the map was opened with
-  document.querySelector('.graph-open').href = 'graph.html?' + new URLSearchParams({ ...(gq && { city: gq }), ...(LANG === 'nl' && { lang: 'nl' }) });
-  document.querySelector('.tally-count').childNodes[1].textContent = ' ' + t('buildings');
+  document.querySelector('.graph-open').href = graphHref();
+  document.querySelector('.arch-toggle span').textContent = t('Archaeology');
+  document.querySelector('.tally-count').childNodes[1].textContent = ' ' + t(ARCH.on ? 'research areas' : 'buildings');
   document.querySelector('.howto').textContent = t('Drag to turn. Right-drag or Shift-drag to move. Scroll to zoom.');
   const ld = document.getElementById('loading'); if (ld.firstChild) ld.firstChild.textContent = t('Building the city') + ' ';
   playBtn.setAttribute('aria-label', t(playing ? 'Pause' : "Play the city's growth"));
@@ -1979,6 +2239,7 @@ let frame = 0;
 renderer.setAnimationLoop(now => {
   frame++;
   stepFlight(now);
+  stepFlip(now);
   uniforms.uNow.value = now / 1000;
   uniforms.uMask.value = maskTarget;
   controls.update();
@@ -1993,7 +2254,7 @@ renderer.setAnimationLoop(now => {
     if (t >= 1) stopPlay();
     drawHist();
   }
-  if (pointer && !dragging && frame % 3 === 0) {
+  if (pointer && !dragging && !ARCH.on && frame % 3 === 0) {
     const gid = pick(pointer[0], pointer[1]);
     uniforms.uHover.value = gid;
     showCard(gid, pointer[0], pointer[1]);

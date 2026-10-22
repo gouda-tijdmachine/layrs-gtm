@@ -126,6 +126,24 @@ def complexes(ids: list[str], ua: dict) -> list[dict]:
     return out
 
 
+def elastic_all(filters: list[dict], ua: dict, fields: list[str] | None = None) -> list[dict]:
+    """Every document matching the filters, page by page (sorted on @id, continued with search_after)."""
+    out, after = [], None
+    while True:
+        body = {"size": 5000, "sort": [{"@id.keyword": "asc"}], "query": {"bool": {"filter": filters}}}
+        if fields:
+            body["_source"] = ["@id"] + [f if f.startswith("http") else F + f for f in fields]
+        if after:
+            body["search_after"] = after
+        r = requests.post(ELASTIC, json=body, headers=ua, timeout=300)
+        r.raise_for_status()
+        hits = r.json()["hits"]["hits"]
+        out += [h["_source"] for h in hits]
+        if len(hits) < 5000:
+            return out
+        after = hits[-1]["sort"]
+
+
 # ---------- SPARQL ----------
 
 def select(body: str, ua: dict) -> list[dict]:
@@ -231,6 +249,34 @@ SELECT ?nr ?thumb ?desc ?rights ?page WHERE {{ GRAPH <{IMAGE_GRAPH}> {{
             out[r["nr"]].append(ph)
     return {nr: sorted(ps, key=lambda p: (not outside.search(p["desc"] or ""), p["src"]))[:PHOTOS_PER_MONUMENT]
             for nr, ps in out.items()}
+
+
+RNCE = "https://data.cultureelerfgoed.nl/id/rnce#"
+THESAURUS = "https://data.cultureelerfgoed.nl/term/id/rn/2/thesaurus"
+
+
+def abr_periods(ua: dict) -> list[dict]:
+    """The archaeological periods of the ABR, as the Referentienetwerk (RN2) holds them: every term with
+    rnce:beginYearAbr and endYearAbr, with its code (skos:hiddelLabel, sic), label and broader period."""
+    rows = select(f"""SELECT DISTINCT ?c (STR(?l) AS ?label) (STR(?k) AS ?code) ?begin ?end ?broader WHERE {{
+  GRAPH <{THESAURUS}> {{ ?c <{RNCE}beginYearAbr> ?begin ; <{RNCE}endYearAbr> ?end ; skos:prefLabel ?l .
+    OPTIONAL {{ ?c skos:hiddelLabel ?k }} OPTIONAL {{ ?c skos:broader ?broader }} }} }}""", ua)
+    out = {}
+    for r in rows:
+        out.setdefault(r["c"], dict(uri=r["c"], label=r["label"], code=r.get("code"), begin=int(float(r["begin"])),
+                                    end=int(float(r["end"])), broader=r.get("broader")))
+    return list(out.values())
+
+
+def terms(uris: list[str], ua: dict) -> dict[str, dict]:
+    """Label and broader term (with its label) of Referentienetwerk terms: {uri: {label, broader, broaderLabel}}."""
+    out = {}
+    for i in range(0, len(uris), 200):
+        values = " ".join(f"<{u}>" for u in uris[i:i + 200])
+        for r in select(f"""SELECT ?c (STR(?l) AS ?label) ?b (STR(?bl) AS ?blabel) WHERE {{ GRAPH <{THESAURUS}> {{
+  VALUES ?c {{ {values} }} ?c skos:prefLabel ?l . OPTIONAL {{ ?c skos:broader ?b . ?b skos:prefLabel ?bl }} }} }}""", ua):
+            out.setdefault(r["c"], dict(label=r["label"], broader=r.get("b"), broaderLabel=r.get("blabel")))
+    return out
 
 
 def townscapes(ua: dict) -> list[dict]:
