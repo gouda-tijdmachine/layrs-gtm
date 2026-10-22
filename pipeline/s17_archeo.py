@@ -30,8 +30,9 @@ RAW = Path(f"{DATA}/raw/archeo")
 OUT = Path(f"{WEB}/archeo")
 SPREAD_MAX = 3
 TOP = 8
-GRAPH_MIN_OBJECTS = 20  # areas in the graph: the ones with at least this many objects
-GRAPH_MIN_AREAS = 3     # terms in the graph: found in at least this many of those areas
+GRAPH_MIN_OBJECTS = 40  # areas in the graph: the larger investigations, with at least this many objects
+# terms in the graph: found in at least this many of those areas (archeologische complexen are few, so all of them)
+GRAPH_MIN_AREAS = {"person": 2, "architect": 8, "organisation": 10}
 LDV = "https://linkeddata.cultureelerfgoed.nl/cho-kennis/id/"
 # the layers, shallow to deep: (parent period's label or own label, English name, colour)
 LAYERS = [
@@ -106,7 +107,7 @@ def main():
         nr_of[a["id"]] = len(out_areas)
         out_areas.append(dict(
             nr=a["nr"], cho=a["id"], poly=[first, len(polys)], mask=mask,
-            name=" / ".join(dict.fromkeys(names)) if names else f"Onderzoeksgebied {a['nr']}",
+            name=short_name(names, a["nr"]),
             spots=[dict(name=s["name"], cho=s["id"], how=s["how"]) for s in spots_of[a["id"]]][:12],
             counts=dict(complexes=count["archeologischcomplex"], features=count["grondsporen"], finds=count["vondsten"],
                         objects=sum(o["n"] or 1 for o in objs if o["kind"] == "vondsten")),
@@ -156,7 +157,8 @@ def main():
             nodes.setdefault(o["materialUri"], dict(id=o["materialUri"], type="organisation", label=o["material"],
                                                     label_nl=o["material"], desc="materiaal", url=o["materialUri"]))
     # only terms found in at least three areas, so the graph stays readable
-    keep = {u for u, places in links.items() if len(places) >= GRAPH_MIN_AREAS or nodes.get(u, {}).get("type") == "event"}
+    keep = {u for u, places in links.items() if nodes.get(u, {}).get("type") == "event"
+            or len(places) >= GRAPH_MIN_AREAS.get(nodes.get(u, {}).get("type"), 3)}
     places = {}
     for a in out_areas:
         pid = f"a:{a['nr']}"
@@ -183,11 +185,23 @@ def main():
                    lede=("Every point is a term of the Referentienetwerk (ABR); every square a research area. Pick one or "
                          "more points, then open them on the map, under the ground."),
                    lede_nl=("Elk punt is een begrip uit het Referentienetwerk (ABR); elk vierkantje een onderzoeksgebied. "
-                            "Kies een of meer punten en open ze op de kaart, onder de grond.")),
+                            "Kies een of meer punten en open ze op de kaart, onder de grond."),
+                   hint="Squares are research areas. Click a point to select it; click more to add them.",
+                   hint_nl="Vierkantjes zijn onderzoeksgebieden. Klik op een punt om het te kiezen; klik op meer om ze toe te voegen."),
         nodes=[n for n in nodes.values() if n["id"] in keep and any(l["e"] == n["id"] for l in out_links)],
         places={p: v for p, v in places.items() if p in used}, links=out_links)
     (OUT / "graph.json").write_text(json.dumps(graph, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
     print(len(graph["nodes"]), "terms,", len(graph["places"]), "areas,", len(out_links), "links in the graph")
+
+
+def short_name(names: list[str], nr: str, limit: int = 48) -> str:
+    """An area's name for labels: its first find spot's name, '(+n)' when it has more, at most `limit` characters.
+    One large survey (Knooppunt Hoevelaken) holds dozens of spots; all their names together would fill a screen."""
+    names = list(dict.fromkeys(names))
+    if not names:
+        return f"Onderzoeksgebied {nr}"
+    first = names[0] if len(names[0]) <= limit else names[0][:limit - 1].rsplit(" ", 1)[0] + "…"
+    return first + (f" (+{len(names) - 1})" if len(names) > 1 else "")
 
 
 def fmt_year(y: int) -> str:

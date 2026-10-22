@@ -48,6 +48,7 @@ function init(G, city) {
   if (G.intro) {
     const k = 'People, events and the buildings they touched';
     EN[k] = G.intro.title; NL[k] = G.intro.title_nl; EN.lede = G.intro.lede; NL.lede = G.intro.lede_nl;
+    if (G.intro.hint) { EN.hint = G.intro.hint; NL.hint = G.intro.hint_nl; }
   }
   document.querySelector('.g-home').childNodes[1].textContent = city.label;
   document.title = `LAYRS: ${city.label} — the graph`;
@@ -132,8 +133,10 @@ function init(G, city) {
   let query = '';
   const label = n => n.kind === 'place' ? n.name : (LANG === 'nl' && n.label_nl) || n.label;
 
+  // On the canvas a long name is cut short; the tooltip and the evidence panel give it whole.
+  const short = s => s.length > 48 ? s.slice(0, 47) + '…' : s;
   function render() {
-    nodeSel.select('text').text(label);
+    nodeSel.select('text').text(d => short(label(d)));
     const vis = n => shown[n.type];
     nodeSel.classed('hidden', d => !vis(d));
     linkSel.classed('hidden', d => !vis(d.source) || !vis(d.target));
@@ -214,7 +217,8 @@ function init(G, city) {
       const places = [...nbrs.get(id)].map(p => byId.get(p));
       const items = places.map(p => {
         const l = links.find(l => l.source.id === id && l.target.id === p.id);
-        const txt = l.texts.map(x => `<p>${esc(LANG === 'nl' && x.text_nl ? x.text_nl : x.text)} <a href="${esc(x.source)}" target="_blank" rel="noopener">${t('Source')}</a></p>`).join('');
+        const txt = l.texts.map(x => { const src = x.source || p.url;
+          return `<p>${esc(LANG === 'nl' && x.text_nl ? x.text_nl : x.text)}${src ? ` <a href="${esc(src)}" target="_blank" rel="noopener" title="${esc(src)}">${t('Source')}</a>` : ''}</p>`; }).join('');
         return `<li>${p.photo ? `<img src="${esc(p.photo)}" alt="">` : '<span class="ph"></span>'}
           <div><button data-id="${p.id}"><b>${esc(p.name)}</b></button>${txt}</div></li>`;
       }).join('');

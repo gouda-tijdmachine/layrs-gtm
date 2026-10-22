@@ -201,7 +201,8 @@ for (const p of periods) if (p.label_nl) NL_UI[p.label] = p.label_nl;
 Object.assign(NL_UI, {
   'Protected townscapes': 'Beschermde gezichten', 'From the register': 'Uit het register',
   'Part of the complex': 'Onderdeel van het complex', 'Read the full entry': 'Lees de hele beschrijving in het register',
-  'Archaeology': 'Archeologie', 'Under the ground': 'Onder de grond', 'Underground': 'Ondergrond',
+  'Archaeology': 'Archeologie', 'Built': 'Gebouwd', 'Back to the city as built': 'Terug naar de gebouwde stad',
+  'Turn the city over: what lies under the ground': 'Draai de stad om: wat er onder de grond ligt', 'Under the ground': 'Onder de grond', 'Underground': 'Ondergrond',
   'research areas': 'onderzoeksgebieden', 'Research area': 'Onderzoeksgebied', 'registered': 'geregistreerd',
   'Periods found here': 'Perioden die hier gevonden zijn', 'Archaeological complexes': 'Archeologische complexen',
   'Features': 'Grondsporen', 'Finds': 'Vondsten', 'Materials': 'Materialen', 'Find spots': 'Vindplaatsen',
@@ -240,6 +241,32 @@ document.querySelector('.masthead h1').childNodes[1].textContent = config.label;
     <li>Energielabels: RVO via de Atlas Leefomgeving van het RIVM. Publiek domein.</li>
     <li>Namen, foto's: Wikidata, Wikipedia, Wikimedia Commons; bij elke foto staan maker en licentie.</li></ul>
     <h3>Methode</h3><p>Afgeronde jaartallen in de BAG zijn gespreid over hun afrondingsstap; waar het monumentenregister een gebouw eerder dateert, wint het register. Geschatte jaren zijn lichter en gemarkeerd met “c.”.</p>`;
+  // the archaeology mode's own section; setArcheo() moves it to the top while the city is turned over
+  if (config.archeology) {
+    en.insertAdjacentHTML('beforeend', `<section class="about-arch"><h3>Under the ground: archaeology</h3>
+      <p>The Archaeology switch turns the city over. Under the ground lies every archaeological research area
+      (onderzoeksgebied) once for each period its finds and features date from: the deeper, the older, from Recent down
+      to the Palaeolithic. Depth stands for time, not for metres below the surface. Click a surface for its
+      archaeological complexes, features, finds and materials, and for the find spots.</p>
+      <ul><li>Research areas, find spots, archaeological complexes, features and finds: the RCE's Linked Data Voorziening
+      (CHO), through its search index. Only records marked public. CC0.</li>
+      <li>Periods, types and materials: terms of the Referentienetwerk (RN2) and the Archeologisch Basisregister (ABR),
+      each linked to its URI; the periods' years come from the ABR.</li>
+      <li>Protected sites: the archaeological national monuments in the monument register.</li></ul>
+      <p>An object spanning more than three periods counts as undated; an area without dated finds is not shown.</p></section>`);
+    nl.insertAdjacentHTML('beforeend', `<section class="about-arch"><h3>Onder de grond: archeologie</h3>
+      <p>De knop Archeologie draait de stad om. Onder de grond ligt elk archeologisch onderzoeksgebied één keer voor
+      elke periode waaruit de vondsten en grondsporen dateren: hoe dieper, hoe ouder, van Recent tot het Paleolithicum.
+      De diepte staat voor tijd, niet voor meters onder het maaiveld. Klik op een vlak voor de archeologische complexen,
+      grondsporen, vondsten en materialen, en voor de vindplaatsen.</p>
+      <ul><li>Onderzoeksgebieden, vindplaatsen, archeologische complexen, grondsporen en vondsten: de Linked Data
+      Voorziening (CHO) van de RCE, via de zoekindex. Alleen wat als openbaar is gemarkeerd. CC0.</li>
+      <li>Perioden, typen en materialen: begrippen uit het Referentienetwerk (RN2) en het Archeologisch Basisregister
+      (ABR), elk met een link naar zijn URI; de jaartallen van de perioden komen uit het ABR.</li>
+      <li>Beschermde terreinen: de archeologische rijksmonumenten uit het monumentenregister.</li></ul>
+      <p>Een object dat meer dan drie perioden beslaat, telt als niet te dateren; een gebied zonder gedateerde vondsten
+      staat er niet in.</p></section>`);
+  }
   // the city's own Wikipedia article (pipeline/s06_wiki.py), after the first lines
   fetch(D + 'about.json').then(r => r.json()).then(a => {
     // its own escaping: this can run before the card code further down has defined esc()
@@ -444,6 +471,11 @@ function setArcheo(on) {
   if (on) u.searchParams.set('mode', 'archeo'); else { u.searchParams.delete('mode'); u.searchParams.delete('focus'); }
   history.replaceState(null, '', u);
   if (!on) { ARCH.focus = null; archFocusMeshes(); focusEl.hidden = true; }
+  // the about text leads with archaeology while the city is turned over
+  document.querySelectorAll('#about article').forEach(a => {
+    const sec = a.querySelector('.about-arch');
+    if (sec) on ? a.querySelector('h2').after(sec) : a.append(sec);
+  });
   applyStaticText(); renderPanel(); drawHist();
 }
 function stepFlip(now) {
@@ -1118,7 +1150,7 @@ function cardHtml(gid, pinned) {
   const inLayers = b.groups.map(g => {
     const note = g.layer.notes?.[b.bag];
     return `<li><i style="background:${groupColor(g)}"></i><div><b>${esc(tr(g.layer, 'title'))}</b> <span>${esc(tr(g, 'label'))}</span>
-      ${pinned && note ? `<p>${esc(tr(note, 'story'))}${note.source ? ` ${link(note.source, t('Source'))}` : ''}</p>` : ''}</div></li>`;
+      ${pinned && note ? `<p>${esc(tr(note, 'story'))}${note.source ? ` ${link(note.source, /linkeddata\.cultureelerfgoed/.test(note.source) ? `${t('Source')} (LDV)` : t('Source'))}` : ''}</p>` : ''}</div></li>`;
   }).join('');
   const regHtml = pinned && reg?.text ? `<section class="register"><h4>${t('From the register')}</h4>
       ${reg.complex ? `<p class="why">${t('Part of the complex')} ${link(reg.complex.url, reg.complex.name || '')}${
@@ -2205,7 +2237,9 @@ function applyStaticText() {
   document.querySelectorAll('.modes button[data-mode]').forEach(b => { b.textContent = t(b.dataset.label); });
   document.querySelector('.graph-open span').textContent = t('Graph');
   document.querySelector('.graph-open').href = graphHref();
-  document.querySelector('.arch-toggle span').textContent = t('Archaeology');
+  // the switch names where it goes: under the ground, or back to the city as built
+  archBtn.querySelector('span').textContent = t(ARCH.on ? 'Built' : 'Archaeology');
+  archBtn.title = t(ARCH.on ? 'Back to the city as built' : 'Turn the city over: what lies under the ground');
   document.querySelector('.tally-count').childNodes[1].textContent = ' ' + t(ARCH.on ? 'research areas' : 'buildings');
   document.querySelector('.howto').textContent = t('Drag to turn. Right-drag or Shift-drag to move. Scroll to zoom.');
   const ld = document.getElementById('loading'); if (ld.firstChild) ld.firstChild.textContent = t('Building the city') + ' ';
