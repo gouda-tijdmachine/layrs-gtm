@@ -1,0 +1,34 @@
+{
+  "label": "Dordrecht",
+  "gemeentecode": "0505",
+  "origin": [105320.0, 425557.0],
+  "starts": [
+    ["Grote Kerk", "Grote Kerk", 104865.0, 425356.0],
+    ["Dordrecht station", "Station Dordrecht", 105326.0, 424615.0],
+    ["Groothoofd", "Groothoofd", 105523.0, 425921.0]
+  ],
+  "home": {"x": -350, "z": 150, "azimuth": 200, "elevation": 40, "span": 4000},
+  "roofs_within": 1100,
+  "suspect_years": [],
+  "periods": [
+    ["p1", "Before 1500 Medieval town", "Vóór 1500 Middeleeuwse stad", 1000, 1499, "#4a1410"],
+    ["p2", "1500–1649", "1500–1649", 1500, 1649, "#8c1c13"],
+    ["p3", "1650–1799", "1650–1799", 1650, 1799, "#c0462b"],
+    ["p4", "1800–1869", "1800–1869", 1800, 1869, "#d97a2b"],
+    ["p5", "1870–1913 Beyond the walls", "1870–1913 Buiten de wallen", 1870, 1913, "#e5b13a"],
+    ["p6", "1914–1940 Between the wars", "1914–1940 Interbellum", 1914, 1940, "#8e9f3c"],
+    ["p7", "1941–1964 Wielwijk, Crabbehof", "1941–1964 Wielwijk, Crabbehof", 1941, 1964, "#3f8f6b"],
+    ["p8", "1965–1984 Sterrenburg", "1965–1984 Sterrenburg", 1965, 1984, "#2c7391"],
+    ["p9", "1985–2004 Stadspolders, Dubbeldam", "1985–2004 Stadspolders, Dubbeldam", 1985, 2004, "#3a4f9a"],
+    ["p10", "2005–today Stadswerven", "2005–nu Stadswerven", 2005, 2100, "#6a3f8f"]
+  ],
+  "tier1": ["Voorstraat", "Wijnstraat", "Visstraat", "Grotekerksbuurt", "Lange Geldersekade", "Spuiboulevard",
+            "Johan de Wittstraat", "Steegoversloot", "Nieuwstraat", "Merwekade", "Bomkade", "Achterhakkers",
+            "Bagijnhof", "Toulonselaan", "Burgemeester de Raadtsingel", "Laan der Verenigde Naties",
+            "Dubbeldamseweg", "Brouwersdijk", "Krispijnseweg", "Noordendijk", "Oranjelaan", "Amstelwijckweg",
+            "Zuidendijk", "Mijlweg", "Admiraal de Ruyterweg", "Karel Lotsylaan", "Overkampweg", "Smitsweg"],
+  "steps": ["s00_fetch_boundary", "s00_fetch_3dbag", "s00_fetch_3dbv", "s00_fetch_water", "s00_fetch_addresses",
+            "s00_fetch_energy", "s00_fetch_rce", "s00_fetch_wikidata", "s01_load", "s02_attributes", "s01c_roofs",
+            "s01d_spires", "s05_layers", "s07_labels", "s10_commons", "s06_wiki", "s03_tiles", "s04_water", "s13_graph",
+            "s14_search", "s15_addresses", "s16_register"]
+}
