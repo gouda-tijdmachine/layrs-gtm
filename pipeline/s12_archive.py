@@ -17,13 +17,14 @@ from pathlib import Path
 
 import pandas as pd
 import requests
+from .city import DATA, WEB
 
 UA = {"User-Agent": "amsterdam-by-building/0.1 (https://stop-token.com/lab/amsterdam/)"}
 KG = "https://api.lod.uba.uva.nl/datasets/ATM/ATM-KG/services/ATM-KG/sparql"
 ES = "https://api.lod.uba.uva.nl/datasets/ATM/Beeldbank-SAA/services/Beeldbank-SAA/_search"
-CACHE = Path("data/raw/saa/images.jsonl")
-NAMES = Path("data/raw/saa/names.json")
-OUT = Path("web/data/archive")
+CACHE = Path(f"{DATA}/raw/saa/images.jsonl")
+NAMES = Path(f"{DATA}/raw/saa/names.json")
+OUT = Path(f"{WEB}/archive")
 SHARDS = 64
 REC = "https://ams-migrate.memorix.io/resources/records/"
 CONCEPT = "https://ams-migrate.memorix.io/resources/vocabularies/concepts/"
@@ -127,7 +128,7 @@ def main():
     forms = pd.Series([labels.get(r["form"]) for r in rows]).value_counts()
     print(forms.head(12).to_string())
 
-    built = pd.read_parquet("data/buildings.parquet", columns=["identificatie", "year"])
+    built = pd.read_parquet(f"{DATA}/buildings.parquet", columns=["identificatie", "year"])
     built = dict(zip(built.identificatie.str.slice(-16), built.year))
 
     cands = {}

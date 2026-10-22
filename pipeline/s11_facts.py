@@ -4,6 +4,7 @@ from pathlib import Path
 
 from .facts import FACTS
 from .s08_curated import article, geocode, wikidata_bags
+from .city import WEB
 
 
 def main():
@@ -23,7 +24,7 @@ def main():
             continue
         for bag in bags:
             out[bag] = {"en": en, "nl": nl, "source": url}
-    Path("web/data/facts.json").write_text(json.dumps(out, ensure_ascii=False, indent=1))
+    Path(f"{WEB}/facts.json").write_text(json.dumps(out, ensure_ascii=False, indent=1))
     print(f"{len(FACTS) - len(dropped)}/{len(FACTS)} facts on {len(out)} buildings")
     for d in dropped:
         print("dropped:", d)

@@ -11,8 +11,9 @@ from pathlib import Path
 import geopandas as gpd
 import pandas as pd
 
-from .s03_tiles import DAM as ORIGIN
+from .s03_tiles import ORIGIN
 from .ontology import ENTITIES, ORG, PERSON
+from .city import DATA, WEB
 
 RESIDENT_MIN_LINKS = 8
 ARCHITECT_MIN_BUILDINGS = 3  # architects of at least this many buildings with their own Wikidata item
@@ -32,8 +33,8 @@ def same_person(name):
 
 
 def main():
-    layers = {L["id"]: L for L in json.load(open("web/data/layers.json"))}
-    b = gpd.read_parquet("data/buildings.parquet", columns=["identificatie", "year", "geometry"])
+    layers = {L["id"]: L for L in json.load(open(f"{WEB}/layers.json"))}
+    b = gpd.read_parquet(f"{DATA}/buildings.parquet", columns=["identificatie", "year", "geometry"])
     b["bag"] = b.identificatie.str.slice(-16)
     c = b.geometry.centroid
     where = {k: (round(x - ORIGIN[0], 1), round(-(y - ORIGIN[1]), 1), int(yr))
@@ -44,7 +45,7 @@ def main():
     # Dutch stories live in the layer notes; a curated layer may be a group of a bigger one (the world layer).
     nl_of = {(b, n["story"]): n.get("story_nl") for L in layers.values() for b, n in L.get("notes", {}).items()
              if n.get("story")}
-    for L in json.load(open("data/curated.json")):
+    for L in json.load(open(f"{DATA}/curated.json")):
         for e in L["entries"]:
             texts.append((e["bag"], e["name"], e["story"], nl_of.get((e["bag"], e["story"])), e["source"],
                           layers.get(L["id"], {}).get("title", L["title"])))
@@ -59,7 +60,7 @@ def main():
         keep = [n for n in ns if not any(m != n and (n in m or m.split(" (")[0] == n.split(" (")[0] and len(m) < len(n))
                                          for m in ns)]
         names[bag] = " / ".join(keep)
-    for bag, f in json.load(open("web/data/facts.json")).items():
+    for bag, f in json.load(open(f"{WEB}/facts.json")).items():
         texts.append((bag, names.get(bag), f["en"], f["nl"], f["source"], "Did you know"))
 
     nodes, links = [], []
@@ -78,8 +79,8 @@ def main():
 
     # Architects (Wikidata P84 on the building's own item): those of several well-known buildings, and any who is
     # already an entity (De Keyser, Berlage, De Klerk). The link's evidence is the building's own article or item.
-    wiki_all = json.load(open("web/data/wiki.json"))
-    wk_all = pd.read_parquet("data/wiki_index.parquet")
+    wiki_all = json.load(open(f"{WEB}/wiki.json"))
+    wk_all = pd.read_parquet(f"{DATA}/wiki_index.parquet")
     designed = {}
     for bag, k in zip(wk_all.bag, wk_all.wk):
         for a in wiki_all[k].get("architects") or []:
@@ -107,7 +108,7 @@ def main():
     print(sum(1 for n in nodes if n.get("desc", "").startswith("architect")), "architects")
 
     # Residents: one node per person, linked by the quote that names the address.
-    for r in json.load(open("data/residents.json")):
+    for r in json.load(open(f"{DATA}/residents.json")):
         # Only residents known well beyond the city (Wikipedia in RESIDENT_MIN_LINKS languages or more), or one
         # who is already an entity, so the graph stays readable.
         if r["bag"] not in where or (r["links"] < RESIDENT_MIN_LINKS and not any(
@@ -134,10 +135,10 @@ def main():
     links = [l for l in links if l["e"] not in arch_deg or l["e"] in keep]
 
     # Places: the buildings of one name (a hofje of eight houses, a church of two panden) become one node.
-    wiki = json.load(open("web/data/wiki.json"))
-    wk = pd.read_parquet("data/wiki_index.parquet").set_index("bag").wk
+    wiki = json.load(open(f"{WEB}/wiki.json"))
+    wk = pd.read_parquet(f"{DATA}/wiki_index.parquet").set_index("bag").wk
     addr = {}
-    for r in json.load(open("data/residents.json")):
+    for r in json.load(open(f"{DATA}/residents.json")):
         addr.setdefault(r["bag"], r["address"] or r["person"])
     places, place_of = {}, {}
     for bag in sorted({l["bag"] for l in links}):
@@ -163,7 +164,7 @@ def main():
             m["texts"].append(t)
     links = list(merged.values())
     out = dict(nodes=nodes, places=places, links=links)
-    Path("web/data/graph.json").write_text(json.dumps(out, ensure_ascii=False, separators=(",", ":")))
+    Path(f"{WEB}/graph.json").write_text(json.dumps(out, ensure_ascii=False, separators=(",", ":")))
     deg = {}
     for l in links:
         deg.setdefault(l["e"], set()).add(l["p"])

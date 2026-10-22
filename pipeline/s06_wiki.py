@@ -14,6 +14,7 @@ from urllib.parse import unquote
 
 import pandas as pd
 import requests
+from .city import DATA, WEB
 
 UA = {"User-Agent": "amsterdam-by-building/0.1 (https://stop-token.com/lab/amsterdam/)"}
 
@@ -87,7 +88,7 @@ def title_of(url):
 
 
 def main():
-    rows = list(csv.DictReader(open("data/raw/wd_buildings.csv")))
+    rows = list(csv.DictReader(open(f"{DATA}/raw/wd_buildings.csv")))
     items = {}
     for r in rows:
         it = items.setdefault(r["i"], dict(bags=set(), label=r["labelEn"] or r["labelNl"], label_nl=r["labelNl"] or r["labelEn"],
@@ -121,7 +122,7 @@ def main():
         for b in it["bags"]:
             index.setdefault(b, k)
     # Photos found on Commons by address (s10_commons) fill buildings that have none yet.
-    commons = Path("data/commons_best.json")
+    commons = Path(f"{DATA}/commons_best.json")
     if commons.exists():
         best = json.loads(commons.read_text())
         need = {bag: f for bag, f in best.items()
@@ -139,9 +140,9 @@ def main():
                 entries.append(dict(label=None, label_nl=None, wiki=None, wiki_nl=None, architects=[], styles=[], image=img))
             added += 1
         print(added, "buildings got a Commons photo by address")
-    Path("web/data/wiki.json").write_text(json.dumps(entries, ensure_ascii=False, separators=(",", ":")))
-    pd.DataFrame({"bag": list(index), "wk": list(index.values())}).to_parquet("data/wiki_index.parquet")
-    print(len(entries), "entries for", len(index), "panden;", Path("web/data/wiki.json").stat().st_size // 1024, "KB")
+    Path(f"{WEB}/wiki.json").write_text(json.dumps(entries, ensure_ascii=False, separators=(",", ":")))
+    pd.DataFrame({"bag": list(index), "wk": list(index.values())}).to_parquet(f"{DATA}/wiki_index.parquet")
+    print(len(entries), "entries for", len(index), "panden;", Path(f"{WEB}/wiki.json").stat().st_size // 1024, "KB")
 
 
 if __name__ == "__main__":

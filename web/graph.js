@@ -31,9 +31,22 @@ const COLOR = { person: '#1f3f9a', architect: '#0f8a7e', event: '#d0312d', organ
 // The order points are selected in gives their colour on the map, as in the map's layers.
 const SEL_COLORS = ['#ec0000', '#1f4e8c', '#d99a12', '#2e8b57', '#7b3fa0', '#00909a', '#8c5a2b', '#d6336c'];  // the map's GROUP_COLORS
 
-fetch('data/graph.json').then(r => r.json()).then(init);
+// The city comes from ?city=<name>, else from the page's data-city, as on the map; links keep a ?city they were given.
+const CITY_Q = new URLSearchParams(location.search).get('city');
+const CITY = CITY_Q || document.documentElement.dataset.city || 'amsterdam';
+const withCity = u => { if (CITY_Q) u.searchParams.set('city', CITY_Q); return u; };
+Promise.all([fetch(`data/${CITY}/graph.json`).then(r => r.json()), fetch(`data/${CITY}/city.json`).then(r => r.json())])
+  .then(([G, city]) => init(G, city));
 
-function init(G) {
+function init(G, city) {
+  // A graph built from the monument register (s13_graph_rce) brings its own kinds of point and its own intro.
+  if (G.types) TYPES.splice(0, TYPES.length, ...G.types);
+  if (G.intro) {
+    const k = 'People, events and the buildings they touched';
+    EN[k] = G.intro.title; NL[k] = G.intro.title_nl; EN.lede = G.intro.lede; NL.lede = G.intro.lede_nl;
+  }
+  document.querySelector('.g-home').childNodes[1].textContent = city.label;
+  document.title = `LAYRS: ${city.label} — the graph`;
   const nodes = [
     ...G.nodes.map(n => ({ ...n, kind: 'entity' })),
     ...Object.entries(G.places).map(([id, p]) => ({ id, type: 'place', kind: 'place', label: p.name, ...p })),
@@ -182,7 +195,7 @@ function init(G) {
     const n = new Set(selected.flatMap(bagsOf)).size;
     const open = sec.querySelector('.g-open');
     open.textContent = t(n === 1 ? 'Show 1 building on the map' : 'Show {n} buildings on the map', n);
-    open.href = `./?focus=${encodeURIComponent(selected.join(','))}${LANG === 'nl' ? '&lang=nl' : ''}`;
+    open.href = withCity(new URL(`./?focus=${encodeURIComponent(selected.join(','))}${LANG === 'nl' ? '&lang=nl' : ''}`, location.href));
   }
 
   function renderEvidence() {
@@ -228,7 +241,7 @@ function init(G) {
     document.querySelectorAll('[data-i18n]').forEach(el => { el.textContent = t(el.dataset.i18n); });
     search.placeholder = t('Find a name');
     document.querySelectorAll('.g-lang button').forEach(b => b.setAttribute('aria-pressed', b.dataset.lang === LANG));
-    document.querySelectorAll('.g-nav a').forEach(a => { const u = new URL(a.href); if (LANG === 'nl') u.searchParams.set('lang', 'nl'); else u.searchParams.delete('lang'); a.href = u; });
+    document.querySelectorAll('.g-nav a, .g-home').forEach(a => { const u = withCity(new URL(a.href)); if (LANG === 'nl') u.searchParams.set('lang', 'nl'); else u.searchParams.delete('lang'); a.href = u; });
     render();
     declutter();
   }

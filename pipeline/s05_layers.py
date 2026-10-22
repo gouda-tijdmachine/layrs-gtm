@@ -8,17 +8,19 @@ import pandas as pd
 
 from .i18n_nl import NL
 from .layers import LAYERS
-from .s03_tiles import DAM
+from . import layers_rce  # noqa: F401 (registers the "rce" set)
+from .s03_tiles import ORIGIN
+from .city import CFG, DATA, WEB
 
 
 def main():
-    b = gpd.read_parquet("data/buildings.parquet", columns=["identificatie", "year", "geometry"])
+    b = gpd.read_parquet(f"{DATA}/buildings.parquet", columns=["identificatie", "year", "geometry"])
     c = b.geometry.centroid
-    where = dict(zip(b.identificatie.str.slice(-16), zip((c.x - DAM[0]).round(1), (-(c.y - DAM[1])).round(1))))
+    where = dict(zip(b.identificatie.str.slice(-16), zip((c.x - ORIGIN[0]).round(1), (-(c.y - ORIGIN[1])).round(1))))
     bag = b.identificatie.str.slice(-16)
     mask = np.zeros(len(b), dtype=np.uint64)
     catalogue, bit = [], 0
-    for L in LAYERS:
+    for L in [L for L in LAYERS if L["set"] in CFG["layers"]]:
         members = L["source_fn"]()
         # A source returns {pand: group} or {pand: (group, note)}; notes carry the story behind a building.
         # ... or {pand: [(group, note), ...]} when a building belongs to several groups of the layer.
@@ -31,15 +33,16 @@ def main():
                     notes[p] = n
         members = groups_of
         groups = []
-        for key, label in L["groups"]:
+        for key, label, *label_nl in L["groups"]:
             hit = bag.map(lambda k: key in members.get(k, ())).to_numpy(bool)
             mask[hit] |= np.uint64(1) << np.uint64(bit)
             years = b.year[hit].value_counts().sort_index()
             groups.append(dict(key=key, label=label, bit=bit, count=int(hit.sum()),
-                               years={str(int(y)): int(n) for y, n in years.items()}))
+                               years={str(int(y)): int(n) for y, n in years.items()},
+                               **({"label_nl": label_nl[0]} if label_nl else {})))
             bit += 1
         assert bit <= 64, "out of layer bits"
-        meta = {k: v for k, v in L.items() if k not in ("source_fn", "groups", "source")}
+        meta = {k: v for k, v in L.items() if k not in ("source_fn", "groups", "source", "set")}
         in_city = set(bag)
         meta.update(source=dict(label=L["source"][0], url=L["source"][1]), groups=groups,
                     count=sum(g["count"] for g in groups),
@@ -49,7 +52,7 @@ def main():
     out = pd.DataFrame({"identificatie": b.identificatie,
                         "lay0": (mask & np.uint64(0xFFFFFFFF)).astype(np.uint32),
                         "lay1": (mask >> np.uint64(32)).astype(np.uint32)})
-    out.to_parquet("data/layers.parquet")
+    out.to_parquet(f"{DATA}/layers.parquet")
     # Dutch next to English for every text the dictionary knows; list the rest so they get translated.
     missing = set()
     def nl(obj, *keys):
@@ -70,7 +73,7 @@ def main():
                 nl(n, "name", "story")
     if missing:
         print(f"{len(missing)} texts without Dutch:", *sorted(missing)[:10], sep="\n  ")
-    Path("web/data/layers.json").write_text(json.dumps(catalogue, ensure_ascii=False, indent=1))
+    Path(f"{WEB}/layers.json").write_text(json.dumps(catalogue, ensure_ascii=False, indent=1))
 
 
 if __name__ == "__main__":

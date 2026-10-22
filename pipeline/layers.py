@@ -4,6 +4,10 @@ A layer has one or more groups; every group takes one bit of a 64-bit mask per b
 Each source function returns {bag pand id (16 digits): group key}. Layers are listed in
 historical order; the viewer shows them in this order.
 
+Each layer belongs to a set (meta key "set"): these are the "amsterdam" set, built on the city's own open data;
+layers_rce.py holds the "rce" set, which any Dutch municipality can build from the national registers. A city
+names its sets in cities/<city>.json.
+
 Sources are fetched by s00_fetch_layers.py. Every one is open (CC0, CC-BY or the open terms of
 maps.amsterdam.nl). The last addresses of Holocaust victims are deliberately absent: the only
 dataset that links them to buildings (Amsterdam Time Machine / Joods Monument) carries no
@@ -17,16 +21,19 @@ from functools import cache
 import geopandas as gpd
 import pandas as pd
 import shapely
+from pathlib import Path
 from shapely.geometry import Point
 from pyproj import Transformer
+from .city import DATA
+from .monuments import wd_monuments
 
 LAYERS = []
-RAW = "data/raw/layers"
+RAW = f"{DATA}/raw/layers"
 
 
 def layer(**meta):
     def wrap(fn):
-        LAYERS.append(dict(meta, source_fn=fn))
+        LAYERS.append(dict({"set": "amsterdam", **meta}, source_fn=fn))
         return fn
     return wrap
 
@@ -35,7 +42,7 @@ def layer(**meta):
 
 @cache
 def buildings() -> gpd.GeoDataFrame:
-    b = gpd.read_parquet("data/buildings.parquet", columns=["identificatie", "year", "geometry"])
+    b = gpd.read_parquet(f"{DATA}/buildings.parquet", columns=["identificatie", "year", "geometry"])
     b["bag"] = b.identificatie.str.slice(-16)
     return b
 
@@ -48,7 +55,7 @@ def monuments() -> list[dict]:
 @cache
 def wikidata_panden() -> dict[str, set[str]]:
     out = {}
-    for r in csv.DictReader(open("data/raw/wd_monuments.csv")):
+    for r in wd_monuments():
         if r["bag"]:
             out.setdefault(r["nr"], set()).add(r["bag"].zfill(16))
     return out
@@ -74,7 +81,7 @@ def monument_panden() -> dict[str, set[str]]:
 
 @cache
 def rce_texts() -> dict[str, str]:
-    return {r["nr"]: r["txt"] for r in csv.DictReader(open("data/raw/rce_descriptions.csv"))}
+    return {r["nr"]: r["txt"] for r in csv.DictReader(open(f"{DATA}/raw/rce_descriptions.csv"))}
 
 
 def by_monument(keyed: dict[str, str]) -> dict[str, str]:
@@ -175,7 +182,7 @@ def faith():
             keyed[str(m["nr"])] = "hofje"
         if "synago" in name:
             keyed[str(m["nr"])] = "synagogue"
-    for r in csv.DictReader(open("data/raw/wd_monuments.csv")):
+    for r in wd_monuments():
         l = r["label"].lower()
         if "synago" in l:
             keyed[r["nr"]] = "synagogue"
@@ -417,14 +424,14 @@ def streetart():
     sidx = b.sindex
     to_rd = Transformer.from_crs(4326, 28992, always_xy=True)
     works = {}
-    for r in csv.DictReader(open("data/raw/wd_streetart.csv")):
+    for r in csv.DictReader(open(f"{DATA}/raw/wd_streetart.csv")):
         if r["i"] in works or not r["coord"]:
             continue
         lon, lat = map(float, r["coord"][6:-1].split())
         artist = r["artistLabel"] if r["artistLabel"] and not r["artistLabel"].startswith("http") else ""
         works[r["i"]] = dict(name=r["iLabel"], artist=artist, year=r["inception"][:4], url=r["nl"] or r["i"],
                              at=to_rd.transform(lon, lat), kind="mural")
-    osm = json.load(open("data/raw/osm_streetart.json"))["elements"]
+    osm = json.load(open(f"{DATA}/raw/osm_streetart.json"))["elements"]
     for e in osm:
         t = e["tags"]
         qid = t.get("wikidata")
@@ -487,21 +494,22 @@ def _curated_layer(L):
         return out
 
     section = L.get("section") or {"jewish": "Faith and community", "secrets": "Discover"}.get(L["id"], "Trade and empire")
-    LAYERS.append(dict(id=L["id"], section=section, title=L["title"], era=L["era"], text=L["intro"],
+    LAYERS.append(dict(set="amsterdam", id=L["id"], section=section, title=L["title"], era=L["era"], text=L["intro"],
                        caveat=L.get("caveat"), source=("Wikipedia, per building", "https://www.wikipedia.org"),
                        groups=[tuple(g) for g in groups], source_fn=fn))
 
 
 # The country layers are too small alone; they become groups of one layer, each with its own colour.
 WORLD = ["russia", "britain", "france", "germany", "sephardic", "asia", "atlantic"]
-_curated = json.load(open("data/curated.json"))
+_curated = json.load(open(f"{DATA}/curated.json")) if Path(f"{DATA}/curated.json").exists() else []
 _world = [L for L in _curated if L["id"] in WORLD]
-_curated_layer(dict(
-    id="world", title="The world in Amsterdam", era="1586–today",
-    intro=("Refugees, merchants, occupiers and colonies tied Amsterdam to the world. Each colour is a country or "
-           "a community; every building carries its own story and source."),
-    groups=[(L["id"], L["title"]) for L in _world],
-    entries=[dict(e, group=L["id"]) for L in _world for e in L["entries"]]))
+if _world:
+    _curated_layer(dict(
+        id="world", title="The world in Amsterdam", era="1586–today",
+        intro=("Refugees, merchants, occupiers and colonies tied Amsterdam to the world. Each colour is a country or "
+               "a community; every building carries its own story and source."),
+        groups=[(L["id"], L["title"]) for L in _world],
+        entries=[dict(e, group=L["id"]) for L in _world for e in L["entries"]]))
 for _L in _curated:
     if _L["id"] not in WORLD:
         _curated_layer(_L)
@@ -510,17 +518,18 @@ for _L in _curated:
 # Residents: its own mode in the viewer, not one of the context layers.
 def _residents():
     out = {}
-    for r in json.load(open("data/residents.json")):
+    for r in json.load(open(f"{DATA}/residents.json")):
         n = out.setdefault(r["bag"], ("res", {"name": r["person"], "people": []}))[1]
         n["people"].append({k: r[k] for k in ("person", "born", "died", "desc", "quote", "url", "links", "address")})
     return out
 
 
-LAYERS.append(dict(
-    id="residents", section="Discover", title="Who lived here", era="1600–today",
-    text=("Painters, writers, scientists and sailors whose Wikipedia biography names the Amsterdam address where "
-          "they lived or worked. Pick a name to fly to the house."),
-    caveat=("Found automatically in Dutch Wikipedia and matched to today's address; house numbers have sometimes "
-            "changed, and some houses were rebuilt since."),
-    source=("Dutch Wikipedia, via Wikidata", "https://nl.wikipedia.org"),
-    groups=[("res", "Home of a well-known resident")], source_fn=_residents))
+if Path(f"{DATA}/residents.json").exists():
+    LAYERS.append(dict(
+        set="amsterdam", id="residents", section="Discover", title="Who lived here", era="1600–today",
+        text=("Painters, writers, scientists and sailors whose Wikipedia biography names the Amsterdam address where "
+              "they lived or worked. Pick a name to fly to the house."),
+        caveat=("Found automatically in Dutch Wikipedia and matched to today's address; house numbers have sometimes "
+                "changed, and some houses were rebuilt since."),
+        source=("Dutch Wikipedia, via Wikidata", "https://nl.wikipedia.org"),
+        groups=[("res", "Home of a well-known resident")], source_fn=_residents))

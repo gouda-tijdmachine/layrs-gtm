@@ -10,6 +10,7 @@ import requests
 from shapely.geometry import Point
 
 from .curated import CURATED
+from .city import DATA
 
 UA = {"User-Agent": "amsterdam-by-building/0.1 (https://stop-token.com/lab/amsterdam/)"}
 
@@ -26,7 +27,7 @@ def article(ref):
 
 @cache
 def buildings():
-    b = gpd.read_parquet("data/buildings.parquet", columns=["identificatie", "geometry"])
+    b = gpd.read_parquet(f"{DATA}/buildings.parquet", columns=["identificatie", "geometry"])
     b["bag"] = b.identificatie.str.slice(-16)
     return b
 
@@ -55,7 +56,7 @@ def wikidata_bags():
     Ids no longer in BAG are left out (the Scheepvaarthuis carried a retired one); callers then geocode."""
     live = set(buildings().bag)
     out = {}
-    for r in csv.DictReader(open("data/raw/wd_buildings.csv")):
+    for r in csv.DictReader(open(f"{DATA}/raw/wd_buildings.csv")):
         for k in ("en", "nl"):
             if r[k] and r["bag"].zfill(16) in live:
                 out.setdefault(r[k], set()).add(r["bag"].zfill(16))
@@ -83,7 +84,7 @@ def main():
         print(f'{L["id"]:10s} {len(entries)}/{len(L["entries"])}')
     for d in dropped:
         print("dropped:", d)
-    json.dump(out, open("data/curated.json", "w"), ensure_ascii=False, indent=1)
+    json.dump(out, open(f"{DATA}/curated.json", "w"), ensure_ascii=False, indent=1)
 
 
 if __name__ == "__main__":

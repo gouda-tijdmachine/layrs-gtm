@@ -8,8 +8,9 @@ import json
 from pathlib import Path
 
 import requests
+from .city import DATA
 
-OUT = Path("data/raw/layers")
+OUT = Path(f"{DATA}/raw/layers")
 API = "https://api.data.amsterdam.nl/v1"
 UA = {"User-Agent": "amsterdam-by-building/0.1 (research)"}
 

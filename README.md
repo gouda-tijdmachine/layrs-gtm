@@ -46,6 +46,32 @@ python3 -m http.server 8642 --directory web
 
 Raw downloads (`data/`) and generated output (`web/data/`) are not in the repository: they are large and rebuilt by the pipeline.
 
+## Another city
+
+Every city has a config in [`cities/`](cities/): its CBS municipality code, origin, periods, layer sets, viewer
+features and pipeline steps. The pipeline reads and writes `data/<city>/` and `web/data/<city>/`, and the viewer opens
+a city with `?city=<city>`. [`cities/amersfoort.json`](cities/amersfoort.json) builds a Dutch municipality from
+national open data only:
+
+```bash
+uv run python -m pipeline.run amersfoort            # every step; or: ... amersfoort s05 s03, or --from s02
+python -m http.server 8642 --directory web          # http://localhost:8642/?city=amersfoort
+uv run python scripts/build_site.py amersfoort      # dist/amersfoort/, a static site for Cloudflare Pages
+```
+
+| Source | What it gives | Step |
+|---|---|---|
+| PDOK Bestuurlijke Gebieden | the municipality's outline | `s00_fetch_boundary` |
+| 3D BAG, or else Kadaster's 3D Basisvoorziening | buildings, heights, years (the fallback has no roof shapes) | `s00_fetch_3dbag`, `s00_fetch_3dbv` |
+| RCE monument register: its Elastic projection ([elastic-ceo](https://github.com/jolietjakeblues/elastic-ceo)), then SPARQL | monuments on their BAG panden, descriptions, styles, building years, protected townscapes | `s00_fetch_rce` ([`rce.py`](pipeline/rce.py)) |
+| Wikidata | names, articles, photos per BAG pand | `s00_fetch_wikidata` |
+| Nationaal Wegenbestand | street names for the labels | `s07_labels` |
+
+Its layers are the `rce` set in [`layers_rce.py`](pipeline/layers_rce.py): monuments by original function, gables,
+architecture styles, protected townscapes, protected heritage. Its graph ([`s13_graph_rce`](pipeline/s13_graph_rce.py))
+links the monuments to their makers, clients and styles as the register records them. Amsterdam's own layers, stories,
+quests and archive photos are the `amsterdam` set and stay Amsterdam's.
+
 ## Data decisions
 
 - **Years.** BAG gives every building a construction year but not always a true one: 729 carry the placeholder 1005,

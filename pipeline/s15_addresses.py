@@ -10,16 +10,17 @@ from collections import Counter, defaultdict
 from pathlib import Path
 
 import pandas as pd
+from .city import DATA, WEB
 
-OUT = Path("web/data/addr")
+OUT = Path(f"{WEB}/addr")
 SHARD = 4096
 
 
 def main():
-    bag = pd.read_parquet("data/buildings.parquet", columns=["identificatie"]).identificatie.str.slice(-16)
+    bag = pd.read_parquet(f"{DATA}/buildings.parquet", columns=["identificatie"]).identificatie.str.slice(-16)
     gid = {k: i for i, k in enumerate(bag)}
     per = defaultdict(set)
-    for a in json.load(open("data/raw/addresses.json")):
+    for a in json.load(open(f"{DATA}/raw/addresses.json")):
         g = gid.get(a["pandidentificatie"])
         if g is None or not a["openbare_ruimte"]:
             continue

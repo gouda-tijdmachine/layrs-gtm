@@ -1,6 +1,6 @@
 """Pack buildings into 600 m binary tiles + a city config JSON.
 
-Local frame: metres from the Dam, x east, z south (three.js, y up).
+Local frame: metres from the city's origin (cities/<city>.json; the Dam for Amsterdam), x east, z south (three.js, y up).
 Tile layout (little-endian, every section 4-byte aligned):
   header  u32 magic, nB, nP, nR, nV; f32 originX, originZ
   B       u32 gid[nB]; i16 year[nB]; u8 flag[nB]; u8 period[nB]; u8 floors[nB]; u8 energy[nB] (0 none, 1 G … 12 A+++++);
@@ -21,13 +21,13 @@ import pandas as pd
 import shapely
 
 from .s02_attributes import clean_parts
-from .periods import PERIODS
+from .periods import LABELS_NL, PERIODS
+from .city import CFG, CITY, DATA, LABEL, ORIGIN, WEB
 
-DAM = (121390.0, 487380.0)  # RD New
 TILE = 600.0
 SIMPLIFY = 0.25
-ROOFS_WITHIN = 2200  # metres from the Dam that get LoD 2.2 roofs: the old city and the canal ring
-OUT = Path("web/data")
+ROOFS_WITHIN = CFG["roofs_within"]  # metres from the centre that get LoD 2.2 roofs: the old city
+OUT = Path(WEB)
 MAGIC = 0x34424241  # 'ABB4'
 ENERGY = ["G", "F", "E", "D", "C", "B", "A", "A+", "A++", "A+++", "A++++", "A+++++"]
 
@@ -37,7 +37,7 @@ def pad4(b: bytes) -> bytes:
 
 
 def to_local(coords: np.ndarray) -> np.ndarray:
-    return np.c_[coords[:, 0] - DAM[0], -(coords[:, 1] - DAM[1])]
+    return np.c_[coords[:, 0] - ORIGIN[0], -(coords[:, 1] - ORIGIN[1])]
 
 
 def rings_of(geom):
@@ -92,11 +92,11 @@ def pack_tile(origin, rows):
 
 
 def main():
-    b = gpd.read_parquet("data/buildings.parquet")
-    b = b.merge(pd.read_parquet("data/layers.parquet"), on="identificatie", how="left")
-    labels = json.load(open("data/raw/energy.json"))
+    b = gpd.read_parquet(f"{DATA}/buildings.parquet")
+    b = b.merge(pd.read_parquet(f"{DATA}/layers.parquet"), on="identificatie", how="left")
+    labels = json.load(open(f"{DATA}/raw/energy.json"))
     b["energy"] = b.identificatie.str.slice(-16).map(lambda k: ENERGY.index(labels[k]) + 1 if labels.get(k) in ENERGY else 0)
-    q = clean_parts(gpd.read_parquet("data/parts.parquet"))
+    q = clean_parts(gpd.read_parquet(f"{DATA}/parts.parquet"))
     gid = {k: i for i, k in enumerate(b.identificatie)}
     ground = dict(zip(b.identificatie, b.b3_h_maaiveld))
 
@@ -104,16 +104,16 @@ def main():
     q["h"] = (q.b3_h_70p - q.identificatie.map(ground)).clip(lower=2.5).fillna(2.5)
     q["geometry"] = shapely.simplify(q.geometry.values, SIMPLIFY, preserve_topology=True)
     parts = q.groupby("identificatie")[["h", "geometry"]].apply(lambda d: list(zip(d.h, d.geometry))).to_dict()
-    # LoD 2.2 roofs replace the prisms wherever the model has them, within ROOFS_WITHIN of the Dam and for every
+    # LoD 2.2 roofs replace the prisms wherever the model has them, within ROOFS_WITHIN of the origin and for every
     # listed building: the whole city in LoD 2.2 would double the download for districts of flat roofs.
-    roofs = gpd.read_parquet("data/roofs.parquet")
-    keep = set(b.identificatie[np.hypot(b.geometry.centroid.x - DAM[0], b.geometry.centroid.y - DAM[1]) < ROOFS_WITHIN])
+    roofs = gpd.read_parquet(f"{DATA}/roofs.parquet")
+    keep = set(b.identificatie[np.hypot(b.geometry.centroid.x - ORIGIN[0], b.geometry.centroid.y - ORIGIN[1]) < ROOFS_WITHIN])
     keep |= {i for i, m in zip(b.identificatie, b.monument) if m}
     for i, g in zip(roofs.identificatie, roofs.geometry):
         if i in parts and i in keep:
             parts[i] = [(-1.0, p) for p in g.geoms]
     # towers and spires the model leaves out, as fine columns from the AHN surface model (s01d_spires)
-    spires = Path("data/spires.parquet")
+    spires = Path(f"{DATA}/spires.parquet")
     if spires.exists():
         sp = gpd.read_parquet(spires)
         for i, g in zip(sp.identificatie, sp.geometry):
@@ -140,7 +140,7 @@ def main():
                           dist=round(float(np.hypot(cx, cz)))))
     index.sort(key=lambda t: t["dist"])
 
-    # Bundle tiles into a few packs, nearest the Dam first, so the city loads centre-out in few requests.
+    # Bundle tiles into a few packs, nearest the origin first, so the city loads centre-out in few requests.
     packs, n_packs = [], 8
     per = -(-len(index) // n_packs)
     for k in range(n_packs):
@@ -165,7 +165,7 @@ def main():
     attrs["year"] = b.year; attrs["orig"] = b.oorspronkelijkbouwjaar.astype(int)
     attrs["mon"] = pd.to_numeric(b.monument, errors="coerce").fillna(0).astype(int)
     attrs["lay0"] = b.lay0; attrs["lay1"] = b.lay1
-    wk = pd.read_parquet("data/wiki_index.parquet").set_index("bag").wk
+    wk = pd.read_parquet(f"{DATA}/wiki_index.parquet").set_index("bag").wk
     attrs["wk"] = b.identificatie.str.slice(-16).map(wk).fillna(-1).astype(int)
     attrs["energy"] = b.energy
     cen = to_local(np.c_[b.geometry.centroid.x, b.geometry.centroid.y])
@@ -177,12 +177,14 @@ def main():
     for p, y in zip(b.period, years):
         hist.setdefault(int(y), [0] * len(PERIODS))[p] += 1
     config = dict(
-        city="amsterdam", label="Amsterdam", tileSize=TILE, origin=DAM,
+        city=CITY, label=LABEL, tileSize=TILE, origin=ORIGIN, features=CFG.get("features", {}),
+        # where the buildings came from: 3D BAG, or the 3D Basisvoorziening without roof shapes (s01_load)
+        buildingSource="3dbag" if any(Path(f"{DATA}/raw/3dbag").glob("*.gpkg")) else "3dbv",
         # where a walk can start, besides the walker's own location
-        starts=[dict(en=en, nl=nl, x=round(x - DAM[0], 1), z=round(-(y - DAM[1]), 1)) for en, nl, x, y in
-                (("Dam", "Dam", *DAM), ("Centraal Station", "Centraal Station", 121880.0, 488060.0))],
-        home=dict(x=0, z=200, azimuth=200, elevation=38, span=7000),
-        periods=[dict(key=k, label=l, from_=a, to=bb, color=col) for k, l, a, bb, col in PERIODS],
+        starts=[dict(en=en, nl=nl, x=round(x - ORIGIN[0], 1), z=round(-(y - ORIGIN[1]), 1)) for en, nl, x, y in
+                CFG["starts"]],
+        home=CFG["home"],
+        periods=[dict(key=k, label=l, label_nl=LABELS_NL[l], from_=a, to=bb, color=col) for k, l, a, bb, col in PERIODS],
         yearMin=int(years.min()), yearMax=int(years.max()),
         histogram={str(k): v for k, v in sorted(hist.items())},
         attrStride=attrs.dtype.itemsize,
@@ -194,7 +196,7 @@ def main():
                    monument=int((b.date_flag == 3).sum()), monumentApprox=int((b.date_flag == 4).sum()),
                    floorsBag3d=int((b.floors_src == 0).sum()), floorsHeight=int((b.floors_src == 1).sum())),
     )
-    (OUT / "amsterdam.json").write_text(json.dumps(config, ensure_ascii=False, separators=(",", ":")).replace('"from_"', '"from"'))
+    (OUT / "city.json").write_text(json.dumps(config, ensure_ascii=False, separators=(",", ":")).replace('"from_"', '"from"'))
     total = sum(t["bytes"] for t in index)
     print(f"{len(index)} tiles, {total/1e6:.1f} MB, attrs {attrs.nbytes/1e6:.1f} MB")
 

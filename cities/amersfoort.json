@@ -1,0 +1,35 @@
+{
+  "label": "Amersfoort",
+  "gemeentecode": "0307",
+  "origin": [155030.0, 463040.0],
+  "starts": [
+    ["Onze Lieve Vrouwetoren", "Onze Lieve Vrouwetoren", 155030.0, 463040.0],
+    ["Amersfoort Centraal", "Amersfoort Centraal", 154228.0, 462788.0],
+    ["Koppelpoort", "Koppelpoort", 154590.0, 463660.0]
+  ],
+  "home": {"x": 0, "z": 300, "azimuth": 200, "elevation": 40, "span": 4500},
+  "roofs_within": 1100,
+  "suspect_years": [],
+  "periods": [
+    ["p1", "Before 1600 Medieval town", "Vóór 1600 Middeleeuwse stad", 1000, 1599, "#4a1410"],
+    ["p2", "1600–1799", "1600–1799", 1600, 1799, "#8c1c13"],
+    ["p3", "1800–1862", "1800–1862", 1800, 1862, "#c0462b"],
+    ["p4", "1863–1913 Railway and garrison town", "1863–1913 Spoorweg- en garnizoensstad", 1863, 1913, "#d97a2b"],
+    ["p5", "1914–1940 Between the wars", "1914–1940 Interbellum", 1914, 1940, "#e5b13a"],
+    ["p6", "1941–1964 Post-war rebuilding", "1941–1964 Wederopbouw", 1941, 1964, "#8e9f3c"],
+    ["p7", "1965–1979 Liendert, Schothorst", "1965–1979 Liendert, Schothorst", 1965, 1979, "#3f8f6b"],
+    ["p8", "1980–1994 Zielhorst, Kattenbroek", "1980–1994 Zielhorst, Kattenbroek", 1980, 1994, "#2c7391"],
+    ["p9", "1995–2009 Nieuwland, Vathorst", "1995–2009 Nieuwland, Vathorst", 1995, 2009, "#3a4f9a"],
+    ["p10", "2010–today", "2010–nu", 2010, 2100, "#6a3f8f"]
+  ],
+  "layers": ["rce"],
+  "tier1": ["Langestraat", "Utrechtseweg", "Stadsring", "Kamp", "Hof", "Lieve Vrouwekerkhof", "Varkensmarkt",
+            "Krommestraat", "Muurhuizen", "Zuidsingel", "Westsingel", "Stationsstraat", "Leusderweg", "Arnhemseweg",
+            "Hogeweg", "Soesterweg", "Kapelweg", "Van Randwijcklaan", "Hooglandseweg", "Amsterdamseweg",
+            "Barchman Wuytierslaan", "Smallepad", "'t Zand", "Kleine Spui", "Weverssingel", "Puntenburgerlaan",
+            "Daam Fockemalaan", "Neptunusweg", "Vathorsterweg", "Nijkerkerstraat"],
+  "features": {"panorama": false, "archive": false, "graph": true, "quests": false},
+  "steps": ["s00_fetch_boundary", "s00_fetch_3dbag", "s00_fetch_3dbv", "s00_fetch_water", "s00_fetch_addresses", "s00_fetch_energy",
+            "s00_fetch_rce", "s00_fetch_wikidata", "s01_load", "s02_attributes", "s01c_roofs", "s01d_spires",
+            "s05_layers", "s06_wiki", "s03_tiles", "s04_water", "s07_labels", "s13_graph_rce", "s14_search", "s15_addresses"]
+}

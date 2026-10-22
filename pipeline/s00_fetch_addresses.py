@@ -14,16 +14,14 @@ from pathlib import Path
 
 import requests
 
-from .s00_fetch_water import BOUNDS
+from .city import DATA, GEMEENTE_CODE, UA, bounds
 
-UA = {"User-Agent": "amsterdam-by-building/0.1 (https://stop-token.com/lab/amsterdam/)"}
 WFS = "https://service.pdok.nl/lv/bag/wfs/v2_0"
 ADRES = "https://api.pdok.nl/kadaster/bag/ogc/v2/collections/adres/items"
 RD = "http://www.opengis.net/def/crs/EPSG/0/28992"
-GEMEENTE_CODE = "0363"
 CELL = 1000
 PAGE = 1000
-VBO = Path("data/raw/verblijfsobjecten.json")
+VBO = Path(f"{DATA}/raw/verblijfsobjecten.json")
 
 
 def get(url, params=None):
@@ -64,7 +62,8 @@ def adres_cell(x, y):
 
 
 def main():
-    cells = [(x, y) for x in range(BOUNDS[0], BOUNDS[2], CELL) for y in range(BOUNDS[1], BOUNDS[3], CELL)]
+    x0, y0, x1, y1 = bounds(CELL)
+    cells = [(x, y) for x in range(x0, x1, CELL) for y in range(y0, y1, CELL)]
     if not VBO.exists():
         with ThreadPoolExecutor(6) as ex:
             pand = dict(p for part in ex.map(lambda c: vbo_cell(*c), cells) for p in part)
@@ -82,7 +81,7 @@ def main():
                          huisletter=a["huisletter"] or "", toevoeging=a["toevoeging"] or "", postcode=a["postcode"],
                          verblijfsobject=a["adresseerbaar_object_identificatie"],
                          pandidentificatie=pand.get(a["adresseerbaar_object_identificatie"])))
-    Path("data/raw/addresses.json").write_text(json.dumps(rows, ensure_ascii=False))
+    Path(f"{DATA}/raw/addresses.json").write_text(json.dumps(rows, ensure_ascii=False))
     print(len(pand), "verblijfsobjecten;", len(rows), "addresses,", sum(not r["pandidentificatie"] for r in rows),
           "without a pand")
 

@@ -17,14 +17,14 @@ import numpy as np
 import pandas as pd
 from scipy.spatial import cKDTree
 
-from .monuments import load as load_monuments
+from .monuments import load as load_monuments, wd_monuments
 from .periods import period_index
+from .city import CFG, DATA, ORIGIN
 
 PLACEHOLDER = 1005
 FLAG_EXACT, FLAG_FAINT, FLAG_ESTIMATED, FLAG_MONUMENT, FLAG_MONUMENT_APPROX, FLAG_WIKIDATA = 0, 1, 2, 3, 4, 5
 LATER_MARGIN = 10
-SUSPECT_YEARS = (1905,)
-DAM = (121390.0, 487380.0)
+SUSPECT_YEARS = tuple(CFG["suspect_years"])
 FLOORS_BAG3D, FLOORS_HEIGHT = 0, 1
 STOREY_M = 3.2
 
@@ -61,7 +61,7 @@ def apply_monuments(p: pd.DataFrame) -> pd.DataFrame:
     # Where RCE gives no date, a Wikidata inception more than ten years before BAG's year wins
     # (Hollandsche Schouwburg: BAG 1988, the rebuilding; built 1892). The earliest inception counts.
     inception = {}
-    for r in csv.DictReader(open("data/raw/wd_monuments.csv")):
+    for r in wd_monuments():
         if r["bag"] and r["inception"][:4].isdigit():
             k = r["bag"].zfill(16)
             inception[k] = min(inception.get(k, 9999), int(r["inception"][:4]))
@@ -101,10 +101,10 @@ def smooth_round_years(p: pd.DataFrame) -> pd.DataFrame:
 
 def flag_suspect_years(p: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
     """Keep as many buildings on a suspect year as the neighbouring years predict; the excess,
-    taken nearest the Dam first (where the placeholder concentrates), becomes estimated."""
+    taken nearest the centre first (where the placeholder concentrates), becomes estimated."""
     y = p.year.values
     exact = p.date_flag.values == FLAG_EXACT
-    dist = np.hypot(p.geometry.centroid.x - DAM[0], p.geometry.centroid.y - DAM[1]).values
+    dist = np.hypot(p.geometry.centroid.x - ORIGIN[0], p.geometry.centroid.y - ORIGIN[1]).values
     for year in SUSPECT_YEARS:
         expected = np.mean([((y == year + d) & exact).sum() for d in (-3, -2, -1, 1, 2, 3)])
         idx = np.where((y == year) & exact)[0]
@@ -140,8 +140,8 @@ def clean_parts(q):
 
 
 def main():
-    p = gpd.read_parquet("data/panden.parquet")
-    q = clean_parts(gpd.read_parquet("data/parts.parquet"))
+    p = gpd.read_parquet(f"{DATA}/panden.parquet")
+    q = clean_parts(gpd.read_parquet(f"{DATA}/parts.parquet"))
 
     p["year"] = p.oorspronkelijkbouwjaar.astype(int)
     p["date_flag"] = np.where(p.year == PLACEHOLDER, FLAG_ESTIMATED, FLAG_EXACT).astype(np.uint8)
@@ -164,7 +164,7 @@ def main():
     p["floors_src"] = np.where(use_bag3d, FLOORS_BAG3D, FLOORS_HEIGHT).astype(np.uint8)
 
     p = p.sort_values("identificatie").reset_index(drop=True)
-    p.to_parquet("data/buildings.parquet")
+    p.to_parquet(f"{DATA}/buildings.parquet")
 
     stats = {
         "buildings": len(p),

@@ -11,9 +11,10 @@ import geopandas as gpd
 import numpy as np
 import shapely
 
-from .s03_tiles import DAM, to_local
+from .s03_tiles import ORIGIN, to_local
+from .city import DATA, WEB
 
-OUT = Path("web/data")
+OUT = Path(WEB)
 
 
 def polygons(geom):
@@ -36,8 +37,8 @@ def pack(geoms) -> bytes:
 
 
 def main():
-    city = gpd.read_file("data/raw/boundary.json").set_crs(28992, allow_override=True).union_all()
-    w = gpd.read_file("data/raw/bgt_waterdeel.geojson").set_crs(28992, allow_override=True)
+    city = gpd.read_file(f"{DATA}/raw/boundary.json").set_crs(28992, allow_override=True).union_all()
+    w = gpd.read_file(f"{DATA}/raw/bgt_waterdeel.geojson").set_crs(28992, allow_override=True)
     w = w[w.relatieve_hoogteligging == 0]
     water = shapely.make_valid(w.union_all()).intersection(city)
     water = water.buffer(0.5).buffer(-0.5).simplify(1.0)

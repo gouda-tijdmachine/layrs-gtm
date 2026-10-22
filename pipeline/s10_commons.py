@@ -17,10 +17,11 @@ import numpy as np
 import requests
 from pyproj import Transformer
 from shapely.geometry import Point
+from .city import DATA, WEB
 
 UA = {"User-Agent": "amsterdam-by-building/0.1 (https://stop-token.com/lab/amsterdam/)"}
 API = "https://commons.wikimedia.org/w/api.php"
-CACHE = Path("data/raw/commons_geo.json")
+CACHE = Path(f"{DATA}/raw/commons_geo.json")
 TO_RD = Transformer.from_crs(4326, 28992, always_xy=True)
 TO_LL = Transformer.from_crs(28992, 4326, always_xy=True)
 
@@ -97,16 +98,16 @@ def geocode(address):
 
 
 def main():
-    b = gpd.read_parquet("data/buildings.parquet", columns=["identificatie", "geometry"])
+    b = gpd.read_parquet(f"{DATA}/buildings.parquet", columns=["identificatie", "geometry"])
     b["bag"] = b.identificatie.str.slice(-16)
     files = harvest(b)
     print(len(files), "geotagged files")
 
-    streets = sorted({l["name"] for l in json.load(open("web/data/labels.json")) if len(l["name"]) > 3}, key=len, reverse=True)
+    streets = sorted({l["name"] for l in json.load(open(f"{WEB}/labels.json")) if len(l["name"]) > 3}, key=len, reverse=True)
     addr_re = re.compile(r"(?<![A-Za-z])(" + "|".join(map(re.escape, streets)) +
                          r")[ _,]+(\d{1,4}(?:\s*(?:tm|t/m|-|–)\s*\d{1,4}|(?:\s+\d{1,4})*)?)(?![\d])")
     rm_re = re.compile(r"\bRM\s?(\d{3,6})(?:\s*tm\s*(\d{1,6}))?|rijksmonument[ _-]?(\d{3,6})", re.I)
-    monuments = json.load(open("data/raw/layers/monuments.json"))
+    monuments = json.load(open(f"{DATA}/raw/layers/monuments.json"))
     mon_panden = {}
     for m in monuments:
         mon_panden.setdefault(str(m["nr"]), set()).update(m["panden"])
@@ -153,7 +154,7 @@ def main():
         if p not in best or score > best[p][0]:
             best[p] = (score, f)
     print(len(best), "buildings with a Commons photo")
-    Path("data/commons_best.json").write_text(json.dumps({p: dict(score=s, **f) for p, (s, f) in best.items()}, ensure_ascii=False))
+    Path(f"{DATA}/commons_best.json").write_text(json.dumps({p: dict(score=s, **f) for p, (s, f) in best.items()}, ensure_ascii=False))
 
 
 if __name__ == "__main__":

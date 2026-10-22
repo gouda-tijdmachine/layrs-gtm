@@ -10,6 +10,7 @@ import geopandas as gpd
 import pandas as pd
 import pyogrio
 import shapely
+from .city import DATA
 
 
 def labels(s):
@@ -17,10 +18,10 @@ def labels(s):
 
 
 def main():
-    b = pd.read_parquet("data/buildings.parquet", columns=["identificatie", "b3_h_maaiveld"])
+    b = pd.read_parquet(f"{DATA}/buildings.parquet", columns=["identificatie", "b3_h_maaiveld"])
     ground = dict(zip(b.identificatie, b.b3_h_maaiveld))
     rows = []
-    for f in sorted(glob.glob("data/raw/3dbag/*.gpkg")):
+    for f in sorted(glob.glob(f"{DATA}/raw/3dbag/*.gpkg")):
         x = pyogrio.read_dataframe(f, layer="lod22_3d")
         x = x[x.identificatie.isin(ground)]
         for i, g, s in zip(x.identificatie, x.geometry.values, x["labels"]):
@@ -34,7 +35,7 @@ def main():
     # a building split over two tiles of the model comes twice: keep the richer copy
     r["n"] = shapely.get_num_geometries(r.geometry.values)
     r = r.sort_values("n", ascending=False).drop_duplicates("identificatie").drop(columns="n")
-    r.to_parquet("data/roofs.parquet")
+    r.to_parquet(f"{DATA}/roofs.parquet")
     print(len(r), "buildings with LoD 2.2 roofs of", len(b))
 
 

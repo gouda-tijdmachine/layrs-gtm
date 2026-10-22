@@ -15,6 +15,7 @@ from pathlib import Path
 import geopandas as gpd
 import requests
 from shapely.geometry import Point
+from .city import DATA, WEB
 
 UA = {"User-Agent": "amsterdam-by-building/0.1 (https://stop-token.com/lab/amsterdam/)"}
 VERBS = re.compile(r"\b(woonde|woonden|woont|bewoonde|verhuisde|betrok|vestigde|kocht|overleed|stierf|geboren|"
@@ -43,7 +44,7 @@ def people():
 
 def street_hits(streets):
     """Dutch Wikipedia articles whose source has '<street> <number>', found with a regex search per street."""
-    cache = Path("data/raw/nlwiki_street_hits.json")
+    cache = Path(f"{DATA}/raw/nlwiki_street_hits.json")
     hits = json.loads(cache.read_text()) if cache.exists() else {}
     def one(st):
         titles, offset = [], 0
@@ -120,7 +121,7 @@ BUILDING_ARTICLES = {}  # nl Wikipedia title → BAG ids of the building the art
 
 def building_articles():
     import csv
-    for r in csv.DictReader(open("data/raw/wd_buildings.csv")):
+    for r in csv.DictReader(open(f"{DATA}/raw/wd_buildings.csv")):
         if r["nl"]:
             t = requests.utils.unquote(r["nl"].rsplit("/wiki/", 1)[1]).replace("_", " ")
             BUILDING_ARTICLES.setdefault(t, set()).add(r["bag"].zfill(16))
@@ -173,7 +174,7 @@ def geocode(address, buildings):
 def main():
     building_articles()
     ppl = people()
-    labels = json.load(open("web/data/labels.json"))
+    labels = json.load(open(f"{WEB}/labels.json"))
     # Streets worth a search: the named canals and main streets, and every street within 2.5 km of the Dam.
     near = sorted({l["name"] for l in labels if len(l["name"]) > 4 and
                    (l["tier"] == 1 or min(x * x + z * z for x, z, *_ in l["pts"]) < 2500 ** 2)})
@@ -185,9 +186,9 @@ def main():
     titles = sorted({requests.utils.unquote(p["article"].rsplit("/wiki/", 1)[1]).replace("_", " ") for p in ppl})
     texts = wikitexts(titles)
     print(len(texts), "articles")
-    streets = sorted({l["name"] for l in json.load(open("web/data/labels.json")) if len(l["name"]) > 4}, key=len, reverse=True)
+    streets = sorted({l["name"] for l in json.load(open(f"{WEB}/labels.json")) if len(l["name"]) > 4}, key=len, reverse=True)
     addr_re = re.compile(r"\b(" + "|".join(map(re.escape, streets)) + r")\s+(\d{1,4}[a-z]?)\b")
-    b = gpd.read_parquet("data/buildings.parquet", columns=["identificatie", "geometry"])
+    b = gpd.read_parquet(f"{DATA}/buildings.parquet", columns=["identificatie", "geometry"])
     b["bag"] = b.identificatie.str.slice(-16)
 
     found = []
@@ -224,7 +225,7 @@ def main():
                                       died=(p.get("died") or "")[:4], img=p.get("img"),
                                       links=int(p["links"]), quote=quote))
     import csv
-    for r in csv.DictReader(open("data/raw/wd_residents.csv")):
+    for r in csv.DictReader(open(f"{DATA}/raw/wd_residents.csv")):
         why = {"P551": "Wikidata records this building as their residence.",
                "P937": "Wikidata records this building as their place of work.",
                "P19": "Wikidata records this building as their birthplace.",
@@ -236,7 +237,7 @@ def main():
     for f in found:  # one entry per person and building; Wikipedia quotes come first, so they win
         uniq.setdefault((f["bag"], f["person"]), f)
     found = sorted(uniq.values(), key=lambda f: -f["links"])
-    Path("data/residents.json").write_text(json.dumps(found, ensure_ascii=False, indent=1))
+    Path(f"{DATA}/residents.json").write_text(json.dumps(found, ensure_ascii=False, indent=1))
     print(len(found), "addresses;", len({f["person"] for f in found}), "people;", len({f["bag"] for f in found}), "buildings")
 
 

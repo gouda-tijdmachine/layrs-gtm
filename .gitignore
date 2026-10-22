@@ -5,3 +5,7 @@ __pycache__/
 web/b/
 web/layers/
 web/explore/
+
+.claude/
+
+dist/

@@ -1,4 +1,5 @@
-"""Rijksmonument dates from RCE register descriptions, linked to BAG panden through Wikidata (P359 → P5208).
+"""Rijksmonument dates from RCE register descriptions, linked to BAG panden by the register itself
+(ceo:heeftBAGRelatie, fetched by s00_fetch_rce or the city API) and, where it has none, through Wikidata (P359 → P5208).
 
 RCE writes dates as Roman centuries with an optional part: XVII (the century), XVIIa–d (quarters),
 XVII A/B (halves); or as years ("1660", "plm 1800", "ca. 1650", "1660-1662"); or in words
@@ -8,7 +9,10 @@ later ones date the facade, the roof, the stoop.
 Wikidata inception (P571) is not used: it often records a restoration (Rembrandthuis: 1907).
 """
 import csv
+import json
 import re
+from pathlib import Path
+from .city import DATA
 
 ROMAN = {"XI": 11, "XII": 12, "XIII": 13, "XIV": 14, "XV": 15, "XVI": 16, "XVII": 17, "XVIII": 18, "XIX": 19, "XX": 20}
 ORDINAL = {"elfde": 11, "twaalfde": 12, "dertiende": 13, "veertiende": 14, "vijftiende": 15, "zestiende": 16,
@@ -53,17 +57,28 @@ def first_date(text: str) -> tuple[int, int] | None:
 def load() -> dict[str, tuple[int, int, str]]:
     """BAG pand id (16 digits) → (lo, hi, monument number)."""
     dates = {}
-    with open("data/raw/rce_descriptions.csv") as f:
+    with open(f"{DATA}/raw/rce_descriptions.csv") as f:
         for r in csv.DictReader(f):
             d = first_date(r["txt"])
             if d:
                 dates[r["nr"]] = d
     links = {}
-    with open("data/raw/wd_monuments.csv") as f:
-        for r in csv.DictReader(f):
-            if r["bag"] and r["nr"] in dates:
-                links[r["bag"].zfill(16)] = (*dates[r["nr"]], r["nr"])
+    for r in wd_monuments():
+        if r["bag"] and r["nr"] in dates:
+            links[r["bag"].zfill(16)] = (*dates[r["nr"]], r["nr"])
+    for m in json.load(open(f"{DATA}/raw/layers/monuments.json")):
+        # building years the register records as data (s00_fetch_rce, from Elastic) beat years read from its text
+        d = tuple(m["years"]) if m.get("years") else dates.get(str(m["nr"]))
+        for p in m["panden"]:
+            if d:
+                links[p] = (*d, str(m["nr"]))
     return links
+
+
+def wd_monuments() -> list[dict]:
+    """Wikidata's rijksmonumenten with their BAG pand and inception (nr, bag, inception, label); none if not fetched."""
+    path = Path(f"{DATA}/raw/wd_monuments.csv")
+    return list(csv.DictReader(open(path, encoding="utf-8"))) if path.exists() else []
 
 
 if __name__ == "__main__":

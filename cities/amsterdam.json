@@ -1,0 +1,29 @@
+{
+  "label": "Amsterdam",
+  "gemeentecode": "0363",
+  "origin": [121390.0, 487380.0],
+  "bounds": [110000, 476000, 136000, 494000],
+  "starts": [
+    ["Dam", "Dam", 121390.0, 487380.0],
+    ["Centraal Station", "Centraal Station", 121880.0, 488060.0]
+  ],
+  "home": {"x": 0, "z": 200, "azimuth": 200, "elevation": 38, "span": 7000},
+  "roofs_within": 2200,
+  "suspect_years": [1905],
+  "periods": [
+    ["p1", "Before 1600", "Vóór 1600", 1000, 1599, "#4a1410"],
+    ["p2", "1600–1665 Canal ring", "1600–1665 Grachtengordel", 1600, 1665, "#8c1c13"],
+    ["p3", "1666–1799", "1666–1799", 1666, 1799, "#c0462b"],
+    ["p4", "1800–1869", "1800–1869", 1800, 1869, "#d97a2b"],
+    ["p5", "1870–1913 Nineteenth-century belt", "1870–1913 Negentiende-eeuwse gordel", 1870, 1913, "#e5b13a"],
+    ["p6", "1914–1940 Amsterdam School", "1914–1940 Amsterdamse School", 1914, 1940, "#8e9f3c"],
+    ["p7", "1941–1964 Garden cities", "1941–1964 Tuinsteden", 1941, 1964, "#3f8f6b"],
+    ["p8", "1965–1984 Bijlmer era", "1965–1984 Bijlmertijd", 1965, 1984, "#2c7391"],
+    ["p9", "1985–1999 Eastern docks", "1985–1999 Oostelijk Havengebied", 1985, 1999, "#3a4f9a"],
+    ["p10", "2000– IJburg, Zuidas, Noord", "2000– IJburg, Zuidas, Noord", 2000, 2100, "#6a3f8f"]
+  ],
+  "layers": ["amsterdam"],
+  "features": {"panorama": true, "archive": true, "graph": true, "quests": true},
+  "steps": ["s01_load", "s02_attributes", "s01c_roofs", "s01d_spires", "s05_layers", "s03_tiles", "s04_water",
+            "s06_wiki", "s07_labels", "s12_archive", "s13_quests", "s14_search", "s15_addresses"]
+}

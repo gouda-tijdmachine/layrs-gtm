@@ -14,8 +14,9 @@ from collections import defaultdict
 from pathlib import Path
 
 import pandas as pd
+from .city import DATA, WEB
 
-OUT = Path("web/data/search")
+OUT = Path(f"{WEB}/search")
 
 
 def normal(s):
@@ -31,11 +32,11 @@ def shard(name):
 
 
 def main():
-    bag = pd.read_parquet("data/buildings.parquet", columns=["identificatie"]).identificatie.str.slice(-16)
+    bag = pd.read_parquet(f"{DATA}/buildings.parquet", columns=["identificatie"]).identificatie.str.slice(-16)
     gid = {k: i for i, k in enumerate(bag)}
 
     by_street = defaultdict(dict)
-    for a in json.load(open("data/raw/addresses.json")):
+    for a in json.load(open(f"{DATA}/raw/addresses.json")):
         g = gid.get(a["pandidentificatie"])
         if g is None or not a["openbare_ruimte"]:
             continue
@@ -64,16 +65,23 @@ def main():
             seen.add(k)
             names.append([label, label_nl if label_nl and label_nl != label else None, g, kind])
 
-    wiki = json.load(open("web/data/wiki.json"))
-    first = pd.read_parquet("data/wiki_index.parquet").groupby("wk").bag.first()
+    wiki = json.load(open(f"{WEB}/wiki.json"))
+    first = pd.read_parquet(f"{DATA}/wiki_index.parquet").groupby("wk").bag.first()
     for k, bg in first.items():
         w = wiki[k] or {}
         add(w.get("label"), w.get("label_nl"), gid.get(bg), "building")
-    for L in json.load(open("data/curated.json")):
+    # curated stories and residents exist where s08_curated and s09_residents ran (Amsterdam)
+    curated, residents = Path(f"{DATA}/curated.json"), Path(f"{DATA}/residents.json")
+    for L in json.load(open(curated)) if curated.exists() else []:
         for e in L["entries"]:
             add(e["name"], e.get("name_nl"), gid.get(e["bag"]), "building")
-    for r in json.load(open("data/residents.json")):
+    for r in json.load(open(residents)) if residents.exists() else []:
         add(r["person"], None, gid.get(r["bag"]), "person")
+    # monuments the register names (s00_fetch_rce), on their first pand
+    monuments = Path(f"{DATA}/raw/layers/monuments.json")
+    for m in json.load(open(monuments)) if monuments.exists() else []:
+        if m.get("name") and m["panden"]:
+            add(m["name"], m["name"], next((gid[p] for p in m["panden"] if p in gid), None), "building")
 
     OUT.mkdir(parents=True, exist_ok=True)
     for f in OUT.glob("*.json"):

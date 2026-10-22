@@ -15,11 +15,12 @@ import pandas as pd
 import requests
 import shapely
 from shapely.geometry import box
+from .city import DATA
 
 UA = {"User-Agent": "amsterdam-by-building/0.1 (https://stop-token.com/lab/amsterdam/)"}
 
 WCS = "https://service.pdok.nl/rws/ahn/wcs/v1_0"
-CACHE = Path("data/raw/ahn_dsm")
+CACHE = Path(f"{DATA}/raw/ahn_dsm")
 SPIRE_MIN = 3.0       # metres above the model's top
 CELL = 0.5
 
@@ -41,9 +42,14 @@ def dsm(x0, y0, x1, y1):
 
 def main():
     CACHE.mkdir(parents=True, exist_ok=True)
-    b = gpd.read_parquet("data/buildings.parquet", columns=["identificatie", "b3_h_maaiveld", "height", "geometry"])
-    roofs = gpd.read_parquet("data/roofs.parquet").set_index("identificatie").geometry
-    mon = {p for m in json.load(open("data/raw/layers/monuments.json")) for p in m["panden"]}
+    b = gpd.read_parquet(f"{DATA}/buildings.parquet", columns=["identificatie", "b3_h_maaiveld", "height", "geometry"])
+    roofs = gpd.read_parquet(f"{DATA}/roofs.parquet").set_index("identificatie").geometry
+    if roofs.empty:
+        print("no LoD 2.2 roofs (3D Basisvoorziening): spires need them, skipped")
+        gpd.GeoDataFrame({"identificatie": [], "model_top": [], "dsm_top": []}, geometry=[], crs=28992).to_parquet(
+            f"{DATA}/spires.parquet")
+        return
+    mon = {p for m in json.load(open(f"{DATA}/raw/layers/monuments.json")) for p in m["panden"]}
     # listed buildings only: elsewhere the scan's tall cells are as likely cranes and masts as towers
     cand = b[(b.height > 14) & b.identificatie.str.slice(-16).isin(mon)]
     print(len(cand), "candidates")
@@ -68,7 +74,7 @@ def main():
             rows.append((r.identificatie, shapely.MultiPolygon(squares), top, float(np.nanmax(rel))))
     s = gpd.GeoDataFrame(pd.DataFrame(rows, columns=["identificatie", "geometry", "model_top", "dsm_top"]),
                          geometry="geometry", crs=28992)
-    s.to_parquet("data/spires.parquet")
+    s.to_parquet(f"{DATA}/spires.parquet")
     for r in s.sort_values("dsm_top", ascending=False).head(12).itertuples():
         print(f"{r.identificatie[-16:]}  model {r.model_top:5.1f} m  ->  {r.dsm_top:5.1f} m  ({len(r.geometry.geoms)} cells)")
     print(len(s), "buildings get towers or spires")

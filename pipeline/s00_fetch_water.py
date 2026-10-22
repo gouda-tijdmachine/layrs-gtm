@@ -1,13 +1,13 @@
-"""Fetch current BGT waterdeel polygons for Amsterdam from the PDOK OGC API, in 2 km cells."""
+"""Fetch current BGT waterdeel polygons for the city from the PDOK OGC API, in 2 km cells."""
 import json
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import requests
+from .city import DATA, bounds
 
 API = "https://api.pdok.nl/lv/bgt/ogc/v1/collections/{c}/items"
 RD = "http://www.opengis.net/def/crs/EPSG/0/28992"
-BOUNDS = (110000, 476000, 136000, 494000)
 CELL = 2000
 
 
@@ -26,7 +26,8 @@ def fetch_cell(collection, x, y):
 
 
 def fetch(collection):
-    cells = [(x, y) for x in range(BOUNDS[0], BOUNDS[2], CELL) for y in range(BOUNDS[1], BOUNDS[3], CELL)]
+    x0, y0, x1, y1 = bounds(CELL)
+    cells = [(x, y) for x in range(x0, x1, CELL) for y in range(y0, y1, CELL)]
     with ThreadPoolExecutor(8) as ex:
         parts = list(ex.map(lambda c: fetch_cell(collection, *c), cells))
     seen, feats = set(), []
@@ -34,7 +35,7 @@ def fetch(collection):
         key = f["properties"]["lokaal_id"]
         if key not in seen:
             seen.add(key); feats.append(f)
-    out = Path(f"data/raw/bgt_{collection}.geojson")
+    out = Path(f"{DATA}/raw/bgt_{collection}.geojson")
     out.write_text(json.dumps({"type": "FeatureCollection", "features": feats}))
     print(collection, len(feats))
 

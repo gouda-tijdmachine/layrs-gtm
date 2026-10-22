@@ -17,12 +17,18 @@ const MODE = { period: 0, floors: 1, energy: 2, layers: 3 };
 const ENERGY_COLORS = ['#efeee9', '#c1272d', '#e4572e', '#f08a24', '#f6c445', '#c9d64a', '#8cc152', '#4caf50',
   '#2e9a49', '#1d8040', '#126b35', '#0b5a2c', '#064a24'];
 
+// The city comes from ?city=<name>, else from the page's data-city; its files are in data/<city>/ (pipeline/city.py).
+const CITY = new URLSearchParams(location.search).get('city') || document.documentElement.dataset.city || 'amsterdam';
+const D = `data/${CITY}/`;
 const [config, layers, attrBuf] = await Promise.all([
-  fetch('data/amsterdam.json').then(r => r.json()),
-  fetch('data/layers.json').then(r => r.json()),
-  fetch('data/attrs.bin').then(r => r.arrayBuffer()),
+  fetch(D + 'city.json').then(r => r.json()),
+  fetch(D + 'layers.json').then(r => r.json()),
+  fetch(D + 'attrs.bin').then(r => r.arrayBuffer()),
 ]);
 const attrs = new DataView(attrBuf);
+// What only some cities have (cities/<city>.json): Amsterdam's street panoramas, archive photos, graph and quests.
+const FEATURES = config.features || {};
+document.title = `LAYRS: ${config.label}`;
 
 // ---------- Language ----------
 // English and Dutch. Data carries `<field>_nl` next to each English text; the interface strings are below.
@@ -195,6 +201,35 @@ const t = s => (LANG === 'nl' && NL_UI[s]) || s;
 const tr = (o, k) => (LANG === 'nl' && o?.[k + '_nl']) || o?.[k];
 const fmtLocale = () => LANG === 'nl' ? 'nl-NL' : 'en';
 const periods = config.periods;
+for (const p of periods) if (p.label_nl) NL_UI[p.label] = p.label_nl;
+document.querySelector('.masthead h1').childNodes[1].textContent = config.label;
+if (!FEATURES.graph) document.querySelector('.graph-open').style.display = 'none';
+if (!FEATURES.quests) document.querySelector('.quests-open').style.display = 'none';
+// The page's about text is Amsterdam's; another city gets one written from its own sources.
+if (CITY !== 'amsterdam') {
+  const n = config.stats.buildings, bv = config.buildingSource === '3dbv';
+  const [en, nl] = document.querySelectorAll('#about article');
+  en.innerHTML = `<h2 id="about-title">About this map</h2>
+    <p>All ${n.toLocaleString('en')} buildings of ${config.label}, coloured by the year they were built and set in the history that shaped them.</p>
+    <p class="notice">A test, built with the open pipeline of <a href="https://github.com/alexbarakov/amsterdam-by-building" target="_blank" rel="noopener">Amsterdam, building by building</a> by Alex Barakov, inspired by Sasha Bogachev's <a href="https://paris.bogachev.fr" target="_blank" rel="noopener">Paris, building by building</a>.</p>
+    <h3>Data</h3><ul>
+    <li>Buildings, heights, years: ${bv ? 'Kadaster 3D Basisvoorziening 2025 (height statistics per building, without roof shapes)' : '3D BAG (TU Delft), with LoD 2.2 roofs in the centre and for listed buildings'}, on the building register BAG. CC BY 4.0.</li>
+    <li>Monuments, styles, protected townscapes: national monument register (RCE), via its linked data and search index. CC0.</li>
+    <li>Water, boundary, addresses: BGT, BAG and Bestuurlijke Gebieden via PDOK; street names: Nationaal Wegenbestand. CC0.</li>
+    <li>Energy labels: RVO via RIVM Atlas Leefomgeving. Public domain.</li>
+    <li>Names, photos: Wikidata, Wikipedia, Wikimedia Commons; each photo credits its author and licence.</li></ul>
+    <h3>Method</h3><p>Rounded years in BAG are spread across their rounding step; where the monument register dates a building earlier, the register wins. Approximate years are paler and marked “c.”.</p>`;
+  nl.innerHTML = `<h2>Over deze kaart</h2>
+    <p>Alle ${n.toLocaleString('nl-NL')} gebouwen van ${config.label}, gekleurd naar hun bouwjaar en geplaatst in de geschiedenis die ze vormde.</p>
+    <p class="notice">Een test, gebouwd met de open pijplijn van <a href="https://github.com/alexbarakov/amsterdam-by-building" target="_blank" rel="noopener">Amsterdam, building by building</a> van Alex Barakov, geïnspireerd door <a href="https://paris.bogachev.fr" target="_blank" rel="noopener">Paris, building by building</a> van Sasha Bogachev.</p>
+    <h3>Gegevens</h3><ul>
+    <li>Gebouwen, hoogtes, bouwjaren: ${bv ? '3D Basisvoorziening 2025 van het Kadaster (hoogtestatistieken per gebouw, zonder dakvormen)' : '3D BAG (TU Delft), met de daken uit LoD 2.2 in het centrum en voor monumenten'}, op basis van de BAG. CC BY 4.0.</li>
+    <li>Monumenten, stijlen, beschermde gezichten: rijksmonumentenregister (RCE), via de linked data en de zoekindex. CC0.</li>
+    <li>Water, grens, adressen: BGT, BAG en Bestuurlijke Gebieden via PDOK; straatnamen: Nationaal Wegenbestand. CC0.</li>
+    <li>Energielabels: RVO via de Atlas Leefomgeving van het RIVM. Publiek domein.</li>
+    <li>Namen, foto's: Wikidata, Wikipedia, Wikimedia Commons; bij elke foto staan maker en licentie.</li></ul>
+    <h3>Methode</h3><p>Afgeronde jaartallen in de BAG zijn gespreid over hun afrondingsstap; waar het monumentenregister een gebouw eerder dateert, wint het register. Geschatte jaren zijn lichter en gemarkeerd met “c.”.</p>`;
+}
 
 // ---------- Scene ----------
 const canvas = document.getElementById('scene');
@@ -246,7 +281,7 @@ async function loadPolygons(url) {
 }
 const flat = new THREE.Group();
 scene.add(flat);
-const [landGeo, waterGeo] = await Promise.all([loadPolygons('data/land.bin'), loadPolygons('data/water.bin')]);
+const [landGeo, waterGeo] = await Promise.all([loadPolygons(D + 'land.bin'), loadPolygons(D + 'water.bin')]);
 const land = new THREE.Mesh(landGeo, new THREE.MeshBasicMaterial({ color: LAND }));
 const water = new THREE.Mesh(waterGeo, new THREE.MeshBasicMaterial({ color: WATER }));
 land.position.y = -0.05;
@@ -255,7 +290,7 @@ flat.add(land, water);
 
 // ---------- Street and canal names ----------
 // Flat on the ground, turned along the street (pipeline/s07_labels.py). Textures are drawn on first use.
-const labelData = await fetch('data/labels.json').then(r => r.json());
+const labelData = await fetch(D + 'labels.json').then(r => r.json());
 const labelGroup = new THREE.Group();
 scene.add(labelGroup);
 const labelTex = new Map();
@@ -535,7 +570,7 @@ function addTile(m) {
 }
 
 // Tiles come in packs (see pipeline/s03_tiles.py); a tile is ready once its pack has arrived.
-const packs = Object.fromEntries(config.packs.map(name => [name, fetch(`data/${name}`).then(r => r.arrayBuffer())]));
+const packs = Object.fromEntries(config.packs.map(name => [name, fetch(`${D}${name}`).then(r => r.arrayBuffer())]));
 for (const w of pool) {
   const next = async () => {
     const t = queue.shift();
@@ -615,8 +650,8 @@ const periodOf = y => periods.find(p => y >= p.from && y <= p.to) || periods[0];
 // ---------- Building card ----------
 // Hover shows a light card that follows the pointer; a click pins it, with the article extract and links.
 let wiki = [], didYouKnow = {};
-fetch('data/wiki.json').then(r => r.json()).then(w => { wiki = w; });
-fetch('data/facts.json').then(r => r.json()).then(f => { didYouKnow = f; }); // 'Did you know', checked in s11_facts
+fetch(D + 'wiki.json').then(r => r.json()).then(w => { wiki = w; });
+if (CITY === 'amsterdam') fetch(D + 'facts.json').then(r => r.json()).then(f => { didYouKnow = f; }); // 'Did you know', checked in s11_facts
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const link = (href, text) => `<a href="${esc(href)}" target="_blank" rel="noopener">${esc(text)}</a>`;
 
@@ -669,7 +704,7 @@ function addressOf(gid, then) {
   const k = Math.floor(gid / 4096);
   if (addrShards[k] === undefined) {
     addrShards[k] = null;
-    fetch(`data/addr/${k}.json`).then(r => r.json()).then(d => { addrShards[k] = d; then(); }).catch(() => {});
+    fetch(`${D}addr/${k}.json`).then(r => r.json()).then(d => { addrShards[k] = d; then(); }).catch(() => {});
   }
   return addrShards[k]?.[gid % 4096] || null;
 }
@@ -698,10 +733,11 @@ function cardHeadHtml(b, w, period) {
 
 const archiveShards = {};
 function archiveOf(bag, then) {
+  if (!FEATURES.archive) return [];
   const n = String(crc32(bag) % 64).padStart(2, '0');
   if (archiveShards[n] === undefined) {
     archiveShards[n] = null;
-    fetch(`data/archive/${n}.json`).then(r => r.json()).then(d => { archiveShards[n] = d; then(); }).catch(() => {});
+    fetch(`${D}archive/${n}.json`).then(r => r.json()).then(d => { archiveShards[n] = d; then(); }).catch(() => {});
   }
   return archiveShards[n]?.[bag] || [];
 }
@@ -718,7 +754,9 @@ function photosHtml(b, im, credit, pinned) {
     credit: `${a.k ? esc(LANG === 'nl' ? a.k : KIND_EN[a.k] || a.k) + ', ' : ''}${a.y}${a.m ? ', ' + esc(a.m) : ''}, ${pinned
       ? link(`https://archief.amsterdam/beeldbank/detail/${a.r}`, 'Stadsarchief Amsterdam') : 'Stadsarchief Amsterdam'}`,
   })), im ? { src: im.thumb, label: t('Today'), credit: `${t('Photo')}: ${credit}` }
-    : { sv: streetView(b), label: t('Today'), credit: pinned ? svCredit() : `${t('Street view')}: Gemeente Amsterdam, CC BY 4.0` }];
+    : FEATURES.panorama ? { sv: streetView(b), label: t('Today'), credit: pinned ? svCredit() : `${t('Street view')}: Gemeente Amsterdam, CC BY 4.0` }
+    : null].filter(Boolean);
+  if (!slides.length) return '';
   slide = slides.length - 1;
   const s = slides[slide];
   const span = archive.length && `${archive[0].y}${archive.length > 1 ? '–' + archive.at(-1).y : ''}`;
@@ -926,7 +964,7 @@ function stepFlight(now) {
 // Every answer is worth up to 100 points; hints and wrong answers cost points. A finished quest can be sent to a
 // friend as a challenge: the link opens the same quest with the score to beat. Progress stays in this browser.
 let quests = [];
-fetch('data/quests.json').then(r => r.ok ? r.json() : []).then(q => { quests = q; challengeFromUrl(); }).catch(() => {});
+if (FEATURES.quests) fetch(D + 'quests.json').then(r => r.ok ? r.json() : []).then(q => { quests = q; challengeFromUrl(); }).catch(() => {});
 const questEl = document.getElementById('quest');
 const questsDlg = document.getElementById('quests');
 const L10 = o => o?.[LANG] || o?.en || '';
@@ -1693,7 +1731,7 @@ walksDlg.addEventListener('click', e => { if (e.target === walksDlg) walksDlg.cl
 // each selection in its own colour, and the rest of the city turns into a white model.
 const focusEl = document.getElementById('focus');
 const focusIds = (new URLSearchParams(location.search).get('focus') || '').split(',').filter(Boolean);
-if (focusIds.length) fetch('data/graph.json').then(r => r.json()).then(G => showFocus(G, focusIds)).catch(() => {});
+if (focusIds.length) fetch(D + 'graph.json').then(r => r.json()).then(G => showFocus(G, focusIds)).catch(() => {});
 function showFocus(G, ids) {
   const groups = [];
   ids.forEach((id, i) => {
@@ -1715,7 +1753,8 @@ function showFocus(G, ids) {
   const cx = pts.reduce((a, b) => a + b.x, 0) / pts.length, cz = pts.reduce((a, b) => a + b.z, 0) / pts.length;
   const spread = Math.max(...pts.map(b => Math.hypot(b.x - cx, b.z - cz)));
   flyTo(cx, cz, null, Math.min(4200, Math.max(380, spread * 2.4)));
-  const back = `graph.html?select=${encodeURIComponent(ids.join(','))}${LANG === 'nl' ? '&lang=nl' : ''}`;
+  const cq = new URLSearchParams(location.search).get('city');
+  const back = `graph.html?select=${encodeURIComponent(ids.join(','))}${cq ? `&city=${encodeURIComponent(cq)}` : ''}${LANG === 'nl' ? '&lang=nl' : ''}`;
   focusEl.innerHTML = `<header><b>${t('From the graph')}</b><button class="f-close" aria-label="${t('Close')}">×</button></header>
     <ul>${groups.map(g => `<li><i style="background:${GROUP_COLORS[g.color]}"></i><span>${esc(g.label)}</span>
       <small>${g.gids.length}</small></li>`).join('')}</ul>
@@ -1858,7 +1897,7 @@ function renderPanel() {
       <div class="layers"><button class="layer view" data-view="floors"><b>${t('Storeys')}</b><span class="n">${fmt(config.stats.buildings)}</span><span class="era">${t('3D BAG')}</span></button>
       <button class="layer view" data-view="energy"><b>${t('Energy label')}</b><span class="n">${fmt(labelled)}</span><span class="era">${t('RVO')}</span></button></div>`);
     panel.querySelectorAll('.layer.view').forEach(b => b.onclick = () => setBuildingView(MODE[b.dataset.view]));
-    panel.insertAdjacentHTML('beforeend', `<p class="contribute"><a href="https://github.com/alexbarakov/amsterdam-by-building/blob/main/CONTRIBUTING.md" target="_blank" rel="noopener">${t('Add a layer on GitHub')}</a></p>`);
+    if (CITY === 'amsterdam') panel.insertAdjacentHTML('beforeend', `<p class="contribute"><a href="https://github.com/alexbarakov/amsterdam-by-building/blob/main/CONTRIBUTING.md" target="_blank" rel="noopener">${t('Add a layer on GitHub')}</a></p>`);
     panel.querySelectorAll('.jump button').forEach(b => b.onclick = () =>
       panel.querySelector(`#sec-${b.dataset.sec.replace(/\W+/g, '-')}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
     panel.querySelectorAll('.layer:not(.view)').forEach(b => b.onclick = () => {
@@ -2087,7 +2126,7 @@ const shards = {};
 const normal = s => String(s).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
 const shardOf = key => /^[a-z]/.test(key) ? key[0] : '0';
 function loadIndex() {
-  index ??= fetch('data/search/index.json').then(r => r.json()).then(d => {
+  index ??= fetch(D + 'search/index.json').then(r => r.json()).then(d => {
     d.streets = d.streets.map(([n, nb]) => ({ n, nb, key: normal(n) }));
     d.names.forEach(n => { n.key = normal(n[0]); n.keyNl = n[1] ? normal(n[1]) : null; });
     return d;
@@ -2096,7 +2135,7 @@ function loadIndex() {
 }
 function numbersOf(st) {
   const k = shardOf(st.key);
-  shards[k] ??= fetch(`data/search/${k}.json`).then(r => r.json());
+  shards[k] ??= fetch(`${D}search/${k}.json`).then(r => r.json());
   return shards[k].then(sh => sh[st.n] || []);
 }
 const findInput = document.getElementById('find-input');
@@ -2233,7 +2272,8 @@ function applyStaticText() {
   document.querySelectorAll('[data-lang-block]').forEach(a => { a.hidden = a.dataset.langBlock !== LANG; });
   document.querySelectorAll('.modes button[data-mode]').forEach(b => { b.textContent = t(b.dataset.label); });
   document.querySelector('.graph-open span').textContent = t('Graph');
-  document.querySelector('.graph-open').href = LANG === 'nl' ? 'graph.html?lang=nl' : 'graph.html';
+  const gq = new URLSearchParams(location.search).get('city');  // keep a ?city the map was opened with
+  document.querySelector('.graph-open').href = 'graph.html?' + new URLSearchParams({ ...(gq && { city: gq }), ...(LANG === 'nl' && { lang: 'nl' }) });
   document.querySelector('.quests-open span').textContent = LANG === 'nl' ? 'Raadsels' : 'Quests';  // short, so the bar fits a phone
   document.querySelector('.tally-count').childNodes[1].textContent = ' ' + t('buildings');
   document.querySelector('.howto').textContent = t('Drag to turn. Right-drag or Shift-drag to move. Scroll to zoom.');

@@ -10,15 +10,16 @@ import pandas as pd
 
 from .quests import QUESTS
 from .s08_curated import article, geocode, wikidata_bags
+from .city import DATA, WEB
 
 
 def main():
-    b = pd.read_parquet("data/buildings.parquet", columns=["identificatie", "year", "date_flag", "height"])
+    b = pd.read_parquet(f"{DATA}/buildings.parquet", columns=["identificatie", "year", "date_flag", "height"])
     b["bag"] = b.identificatie.str.slice(-16)
     by = b.set_index("bag")
-    curated = {L["id"]: L for L in json.load(open("data/curated.json"))}
-    wiki = json.load(open("web/data/wiki.json"))
-    wk = pd.read_parquet("data/wiki_index.parquet").set_index("bag").wk
+    curated = {L["id"]: L for L in json.load(open(f"{DATA}/curated.json"))}
+    wiki = json.load(open(f"{WEB}/wiki.json"))
+    wk = pd.read_parquet(f"{DATA}/wiki_index.parquet").set_index("bag").wk
     label = lambda bag, lang="en": (wiki[wk[bag]].get("label" if lang == "en" else "label_nl") if bag in wk.index else None)
 
     def where(at):
@@ -74,7 +75,7 @@ def main():
         print(f'{q["id"]:10s} level {q["level"]}  {len(steps)}/{len(q["steps"])}')
     for p in problems:
         print("problem:", p)
-    Path("web/data/quests.json").write_text(json.dumps(out, ensure_ascii=False, separators=(",", ":")))
+    Path(f"{WEB}/quests.json").write_text(json.dumps(out, ensure_ascii=False, separators=(",", ":")))
     print(len(out), "quests")
 
 
