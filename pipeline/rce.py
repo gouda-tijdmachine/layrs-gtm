@@ -72,10 +72,11 @@ def name_from_text(txt: str) -> str | None:
     return None
 
 
-def monument(nr, name=None, function=None, styles=(), years=None, txt=None, vbos=(), panden=()):
+def monument(nr, name=None, function=None, styles=(), years=None, txt=None, vbos=(), panden=(), complex=None):
     """One monument as the pipeline keeps it, whichever route it came by."""
     return dict(nr=str(nr), status="Rijksmonument", name=name, function=function, styles=list(styles), years=years,
-                txt=txt, vbos=sorted(set(vbos)), panden=sorted(set(panden)), address=None, architect=None)
+                txt=txt, vbos=sorted(set(vbos)), panden=sorted(set(panden)), address=None, architect=None,
+                complex=complex)
 
 
 # ---------- Elastic ----------
@@ -101,7 +102,25 @@ def from_elastic(gemeente: str, ua: dict) -> list[dict]:
         out.append(monument(get("rijksmonumentnummer")[0], name=(get("naam") or [None])[0],
                             function=(get("oorspronkelijkeFunctie") or get("functie") or [None])[0],
                             styles=[s for s in get("stijl") if s != "n.v.t."], years=years, txt=" ".join((get("omschrijving") or [""])[0].split()),
-                            vbos=get("verblijfsobjectIdentificatie")))
+                            vbos=get("verblijfsobjectIdentificatie"), complex=(get("isOnderdeelVanComplex") or [None])[0]))
+    return out
+
+
+def complexes(ids: list[str], ua: dict) -> list[dict]:
+    """The complexes (groups of monuments registered together: a convent with its school and garden, a country
+    house with its outbuildings) with these CHO ids, from the Elastic projection."""
+    if not ids:
+        return []
+    r = requests.post(ELASTIC, json={"size": len(ids), "query": {"terms": {"@id.keyword": ids}}}, headers=ua, timeout=120)
+    r.raise_for_status()
+    out = []
+    for h in r.json()["hits"]["hits"]:
+        s = h["_source"]
+        get = lambda k: s.get(F + k) or []
+        out.append(dict(id=s["@id"], nr=get("complexnummer")[0], name=(get("naam") or [None])[0],
+                        txt=" ".join((get("omschrijving") or [""])[0].split()),
+                        estate=get("buitenplaats") == ["true"],
+                        url=f"https://monumentenregister.cultureelerfgoed.nl/complexen/{get('complexnummer')[0]}"))
     return out
 
 
@@ -179,6 +198,37 @@ def actors(gemeente: str, ua: dict) -> list[dict]:
   ?actor skos:prefLabel ?al .
   OPTIONAL {{ ?ar ceo:heeftRol/skos:prefLabel ?rl }} }}""", ua)
     return [dict(nr=r["nr"], actor=r["actor"], name=r["name"], role=r.get("role")) for r in rows]
+
+
+IMAGE_GRAPH = "https://linkeddata.cultureelerfgoed.nl/graph/image"
+PHOTOS_PER_MONUMENT = 6
+
+
+def images(nrs: list[str], ua: dict) -> dict[str, list[dict]]:
+    """Photos of the monuments from the RCE image bank (graph 'image'): {nr: [{src, desc, rights, page}]}.
+
+    Every record names its rijksmonumentnummer, a 640 px thumbnail (images.memorix.nl), a caption, its licence
+    (mostly CC BY 4.0) and its page in the image bank. Views of the outside come first; at most PHOTOS_PER_MONUMENT.
+    """
+    rows = []
+    for i in range(0, len(nrs), 200):
+        values = " ".join(f'"{n}"' for n in nrs[i:i + 200])
+        rows += select(f"""PREFIX edm: <http://www.europeana.eu/schemas/edm/>
+PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+PREFIX dc: <http://purl.org/dc/elements/1.1/>
+SELECT ?nr ?thumb ?desc ?rights ?page WHERE {{ GRAPH <{IMAGE_GRAPH}> {{
+  VALUES ?nr {{ {values} }}
+  ?b ceo:rijksmonumentnummer ?nr ; foaf:depiction ?thumb ; dc:rights ?rights .
+  OPTIONAL {{ ?b dc:description ?desc }}
+  OPTIONAL {{ ?b edm:isShownAt ?page FILTER(STRSTARTS(STR(?page), "https://beeldbank")) }} }} }}""", ua)
+    outside = re.compile(r"^(exterieur|overzicht|aanzicht|gezicht|voorgevel|straatbeeld|front)", re.I)
+    out = {}
+    for r in rows:
+        ph = dict(src=r["thumb"], desc=r.get("desc"), rights=r["rights"], page=r.get("page"))
+        if ph not in out.setdefault(r["nr"], []):
+            out[r["nr"]].append(ph)
+    return {nr: sorted(ps, key=lambda p: (not outside.search(p["desc"] or ""), p["src"]))[:PHOTOS_PER_MONUMENT]
+            for nr, ps in out.items()}
 
 
 def townscapes(ua: dict) -> list[dict]:

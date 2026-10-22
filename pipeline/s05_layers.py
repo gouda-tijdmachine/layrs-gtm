@@ -51,7 +51,7 @@ def main():
                         "lay0": (mask & np.uint64(0xFFFFFFFF)).astype(np.uint32),
                         "lay1": (mask >> np.uint64(32)).astype(np.uint32)})
     out.to_parquet(f"{DATA}/layers.parquet")
-    Path(f"{WEB}/layers.json").write_text(json.dumps(catalogue, ensure_ascii=False, indent=1), encoding="utf-8")
+    Path(f"{WEB}/layers.json").write_text(json.dumps(catalogue, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
 
 
 if __name__ == "__main__":

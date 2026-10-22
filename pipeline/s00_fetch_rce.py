@@ -6,6 +6,8 @@ Writes the register's facts in the shapes the later steps read:
   raw/layers/rce_styles.json    [{nr, style}]
   raw/layers/gezichten.geojson  protected townscapes overlapping the municipality, RD New
   raw/layers/rce_actors.json    [{nr, actor, name, role}]: makers and clients, for the graph (s13_graph)
+  raw/layers/complexes.json     [{id, nr, name, txt, estate, url}]: the complexes the monuments belong to
+  raw/layers/rce_images.json    {nr: [{src, desc, rights, page}]}: photos from the RCE image bank
 A monument's panden are the ones the register names, plus the panden of the verblijfsobjecten it names (BAG,
 raw/verblijfsobjecten.json from s00_fetch_addresses).
 """
@@ -54,6 +56,14 @@ def main():
         w.writerows(dict(nr=m["nr"], txt=m["txt"]) for m in mons if m["txt"])
     (OUT / "rce_styles.json").write_text(json.dumps(
         [dict(nr=m["nr"], style=s) for m in mons for s in m["styles"]], ensure_ascii=False), encoding="utf-8")
+
+    cx = rce.complexes(sorted({m["complex"] for m in mons if m.get("complex")}), UA)
+    (OUT / "complexes.json").write_text(json.dumps(cx, ensure_ascii=False), encoding="utf-8")
+    print(len(cx), "complexes holding", sum(bool(m.get("complex")) for m in mons), "monuments")
+
+    photos = rce.images([m["nr"] for m in mons], UA)
+    (OUT / "rce_images.json").write_text(json.dumps(photos, ensure_ascii=False), encoding="utf-8")
+    print(sum(len(v) for v in photos.values()), "photos of", len(photos), "monuments from the RCE image bank")
 
     act = rce.actors(GEMEENTE, UA)
     (OUT / "rce_actors.json").write_text(json.dumps(act, ensure_ascii=False), encoding="utf-8")

@@ -5,9 +5,14 @@ by s00_fetch_rce), and its style. Three kinds of point:
   makers   architects, garden architects, sculptors, engineers, builders  (type "architect")
   clients  the opdrachtgevers: councils, ministries, congregations, housing societies, private people  ("organisation")
   styles   the register's architecture styles with at least STYLE_MIN monuments  ("event", relabelled)
-Places are the monuments, each with the BAG panden it stands on; a link's text quotes the register entry.
+  complexes  monuments the register lists together, with at least two in the graph  ("person", relabelled)
+Architects on Wikidata (P84 on the monuments' items, s00_fetch_wikidata) lend a maker of the same name their full name,
+life and article, or join as makers of their own. Places are the monuments, each with the BAG panden it stands on; a
+link's text quotes its source.
 """
+import csv
 import json
+import re
 from collections import Counter, defaultdict
 from pathlib import Path
 
@@ -30,7 +35,15 @@ ROLES = {  # the register's role → (English, Dutch)
     "opdrachtgever": ("client", "opdrachtgever"),
 }
 TYPES = [dict(key="architect", en="Makers", nl="Makers"), dict(key="organisation", en="Clients", nl="Opdrachtgevers"),
-         dict(key="event", en="Styles", nl="Bouwstijlen"), dict(key="place", en="Buildings", nl="Gebouwen")]
+         dict(key="person", en="Complexes", nl="Complexen"), dict(key="event", en="Styles", nl="Bouwstijlen"),
+         dict(key="place", en="Buildings", nl="Gebouwen")]
+TITLES = {"mr", "ir", "dr", "prof", "jhr", "ing"}
+
+
+def person_key(name: str):
+    """(surname, first initial) of a person's name, to match 'A.J.N. Boosten' with 'Alphons Boosten'."""
+    words = [w for w in re.findall(r"[^\W\d_]+", name.lower()) if w not in TITLES]
+    return (words[-1], words[0][0]) if len(words) >= 2 else None
 
 
 def display(name: str) -> str:
@@ -80,7 +93,7 @@ def main():
         roles_of[aid][en] += 1
         nodes.setdefault(aid, dict(id=aid, label=who, label_nl=who, roles_nl=Counter()))["roles_nl"][nl] += 1
         raw.append((aid, a["nr"], f"The monument register names {who} as {en}.",
-                    f"Het monumentenregister noemt {who} als {nl}."))
+                    f"Het monumentenregister noemt {who} als {nl}.", REGISTER + a["nr"]))
     for aid, n in nodes.items():
         top = roles_of[aid].most_common(1)[0][0]
         n["type"] = "organisation" if top == "client" else "architect"
@@ -97,10 +110,43 @@ def main():
         sid = "style:" + "".join(ch for ch in style.lower() if ch.isalnum())
         nodes[sid] = dict(id=sid, type="event", label=style, label_nl=style, desc="style")
         raw += [(sid, nr, f"The monument register gives its style as {style}.",
-                 f"Het monumentenregister noemt als stijl {style}.") for nr in nrs]
+                 f"Het monumentenregister noemt als stijl {style}.", REGISTER + nr) for nr in nrs]
+
+    # Complexes: monuments registered together, as one point linked to each of its monuments
+    f = Path(f"{DATA}/raw/layers/complexes.json")
+    cx = {c["id"]: c for c in json.load(open(f, encoding="utf-8"))} if f.exists() else {}
+    members = defaultdict(list)
+    for nr, m in mons.items():
+        if m.get("complex") in cx and bags_of.get(nr):
+            members[m["complex"]].append(nr)
+    for cid, nrs in members.items():
+        if len(nrs) < 2:
+            continue
+        c = cx[cid]
+        name = c["name"] or f"Complex {c['nr']}"
+        xid = "cx:" + c["nr"]
+        nodes[xid] = dict(id=xid, type="person", label=name, label_nl=name,
+                          desc="country estate" if c["estate"] else "complex", url=c["url"])
+        raw += [(xid, nr, f"Part of the complex {name} in the monument register.",
+                 f"Onderdeel van het complex {name} in het monumentenregister.", c["url"]) for nr in nrs]
+
+    # Architects on Wikidata: a maker of the same name gets their full name, life and article; others join
+    f = Path(f"{DATA}/raw/wd_architects.csv")
+    makers = {person_key(n["label"]): k for k, n in nodes.items() if n.get("type") == "architect" and person_key(n["label"])}
+    for r in csv.DictReader(open(f, encoding="utf-8")) if f.exists() else []:
+        if not bags_of.get(r["nr"]):
+            continue
+        aid = makers.get(person_key(r["label"])) or "wd:" + r["a"].rsplit("/", 1)[1]
+        n = nodes.setdefault(aid, dict(id=aid, type="architect", desc="architect"))
+        n.update(label=r["label"], label_nl=r["label"], url=r["nl"] or r["a"])
+        if r["born"]:
+            n["years"] = f"{r['born']}–{r['died']}" if r["died"] else f"{r['born']}–"
+        if not any(x[0] == aid and x[1] == r["nr"] for x in raw):
+            raw.append((aid, r["nr"], f"Wikidata names {r['label']} as its architect.",
+                        f"Wikidata noemt {r['label']} als architect.", r["nl"] or r["a"]))
 
     places = {}
-    for nr in sorted({nr for _, nr, _, _ in raw}, key=int):
+    for nr in sorted({x[1] for x in raw}, key=int):
         bags = bags_of[nr]
         m = mons[nr]
         photo = next(((wiki[wk[p]].get("image") or {}).get("thumb") for p in bags if p in wk.index
@@ -111,24 +157,29 @@ def main():
             x=round(sum(where[p][0] for p in bags) / len(bags), 1), z=round(sum(where[p][1] for p in bags) / len(bags), 1))
 
     links = {}
-    for pid, nr, en, nl in raw:
+    for pid, nr, en, nl, src in raw:
         l = links.setdefault((pid, nr), dict(e=pid, p=f"p:rm-{nr}", texts=[]))
-        t = dict(text=en, text_nl=nl, source=REGISTER + nr, via="Rijksmonumentenregister")
+        t = dict(text=en, text_nl=nl, source=src, via="Wikidata" if "wiki" in src else "Rijksmonumentenregister")
         if t not in l["texts"]:
             l["texts"].append(t)
-    # a point's years: the span of the buildings it is linked to
+    # a point's years: a person's life where Wikidata gives it, else the span of the buildings it is linked to
     span = defaultdict(list)
     for l in links.values():
         span[l["e"]].append(places[l["p"]]["year"])
     for n in nodes.values():
+        if n.get("years"):
+            continue
         lo, hi = min(span[n["id"]]), max(span[n["id"]])
         n["years"] = str(lo) if lo == hi else f"{lo}–{hi}"
 
     out = dict(
         types=TYPES,
-        intro=dict(title="Makers, clients and styles of the monuments", title_nl="Makers, opdrachtgevers en stijlen van de monumenten",
-                   lede="Every line is an entry in the national monument register. Pick one or more points, then open them on the map.",
-                   lede_nl="Elke lijn is een vermelding in het rijksmonumentenregister. Kies een of meer punten en open ze op de kaart."),
+        intro=dict(title="Makers, clients, complexes and styles of the monuments",
+                   title_nl="Makers, opdrachtgevers, complexen en stijlen van de monumenten",
+                   lede=("Every line is an entry in the national monument register or on Wikidata. Pick one or more points, "
+                         "then open them on the map."),
+                   lede_nl=("Elke lijn is een vermelding in het rijksmonumentenregister of op Wikidata. Kies een of meer "
+                            "punten en open ze op de kaart.")),
         nodes=list(nodes.values()), places=places, links=list(links.values()))
     Path(f"{WEB}/graph.json").write_text(json.dumps(out, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
     deg = Counter(l["e"] for l in links.values())

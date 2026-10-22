@@ -13,7 +13,7 @@ const NL = {
   'hint': 'Vierkantjes zijn gebouwen. Klik op een punt om het te kiezen; klik op meer om ze toe te voegen.',
   'Find a name': 'Zoek een naam', 'Clear': 'Wissen', 'Source': 'Bron',
   'Show {n} buildings on the map': 'Toon {n} gebouwen op de kaart', 'Show 1 building on the map': 'Toon 1 gebouw op de kaart',
-  '{n} places': '{n} plekken', '1 place': '1 plek', 'Linked to': 'Verbonden met',
+  '{n} places': '{n} plekken', '1 place': '1 plek', 'Linked to': 'Verbonden met', 'Monument register': 'Monumentenregister',
 };
 let LANG = (() => {
   const q = new URLSearchParams(location.search).get('lang');
@@ -215,7 +215,10 @@ function init(G, city) {
         return `<li>${p.photo ? `<img src="${esc(p.photo)}" alt="">` : '<span class="ph"></span>'}
           <div><button data-id="${p.id}"><b>${esc(p.name)}</b></button>${txt}</div></li>`;
       }).join('');
-      return `<h2>${esc(label(n))} <small>${esc(n.years || '')} · ${t(places.length === 1 ? '1 place' : '{n} places', places.length)}</small></h2><ul>${items}</ul>`;
+      // a point's own page: its Wikipedia article, Wikidata item or entry in the register
+      const page = n.url && `<p class="g-lede"><a href="${esc(n.url)}" target="_blank" rel="noopener">${
+        /wikipedia/.test(n.url) ? 'Wikipedia' : /wikidata/.test(n.url) ? 'Wikidata' : t('Monument register')}</a></p>`;
+      return `<h2>${esc(label(n))} <small>${esc(n.years || '')} · ${t(places.length === 1 ? '1 place' : '{n} places', places.length)}</small></h2>${page || ''}<ul>${items}</ul>`;
     }).join('');
     box.querySelectorAll('[data-id]').forEach(b => b.onclick = () => toggle(b.dataset.id));
   }
