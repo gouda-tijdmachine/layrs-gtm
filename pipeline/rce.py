@@ -72,11 +72,12 @@ def name_from_text(txt: str) -> str | None:
     return None
 
 
-def monument(nr, name=None, function=None, styles=(), years=None, txt=None, vbos=(), panden=(), complex=None):
-    """One monument as the pipeline keeps it, whichever route it came by."""
+def monument(nr, name=None, function=None, styles=(), years=None, txt=None, vbos=(), panden=(), complex=None, cho=None):
+    """One monument as the pipeline keeps it, whichever route it came by; cho is its URI in the linked data
+    (https://linkeddata.cultureelerfgoed.nl/cho-kennis/id/rijksmonument/<cho number>, not the monument number)."""
     return dict(nr=str(nr), status="Rijksmonument", name=name, function=function, styles=list(styles), years=years,
                 txt=txt, vbos=sorted(set(vbos)), panden=sorted(set(panden)), address=None, architect=None,
-                complex=complex)
+                complex=complex, cho=cho)
 
 
 # ---------- Elastic ----------
@@ -102,7 +103,8 @@ def from_elastic(gemeente: str, ua: dict) -> list[dict]:
         out.append(monument(get("rijksmonumentnummer")[0], name=(get("naam") or [None])[0],
                             function=(get("oorspronkelijkeFunctie") or get("functie") or [None])[0],
                             styles=[s for s in get("stijl") if s != "n.v.t."], years=years, txt=" ".join((get("omschrijving") or [""])[0].split()),
-                            vbos=get("verblijfsobjectIdentificatie"), complex=(get("isOnderdeelVanComplex") or [None])[0]))
+                            vbos=get("verblijfsobjectIdentificatie"), complex=(get("isOnderdeelVanComplex") or [None])[0],
+                            cho=s["@id"]))
     return out
 
 
@@ -181,9 +183,9 @@ def from_sparql(gemeente: str, ua: dict) -> list[dict]:
     for r in select(f"""SELECT DISTINCT ?nr (STR(?l) AS ?style) WHERE {{ {m}
   ?m ceo:heeftStijlEnCultuur/ceo:heeftStijlEnCultuurNaam/skos:prefLabel ?l FILTER(STR(?l) != "n.v.t.") }}""", ua):
         styles.setdefault(r["nr"], []).append(r["style"])
-    nrs = [r["nr"] for r in select(f"SELECT DISTINCT ?nr WHERE {{ {m} }}", ua)]
+    cho = {r["nr"]: r["m"] for r in select(f"SELECT DISTINCT ?nr ?m WHERE {{ {m} }}", ua)}
     return [monument(nr, name=names.get(nr), function=funcs.get(nr), styles=styles.get(nr, ()),
-                     txt=" ".join(texts.get(nr, "").split())) for nr in nrs]
+                     txt=" ".join(texts.get(nr, "").split()), cho=uri) for nr, uri in cho.items()]
 
 
 def actors(gemeente: str, ua: dict) -> list[dict]:
