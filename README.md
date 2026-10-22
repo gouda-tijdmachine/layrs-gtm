@@ -6,6 +6,7 @@ history, from national open data only. Live:
 - Amersfoort: https://layrs-amersfoort.pages.dev
 - Maastricht: https://layrs-maastricht.pages.dev
 - Dordrecht: https://layrs-dordrecht.pages.dev
+- Gouda: https://www.goudatijdmachine.nl/layrs/ (hosted by the Gouda Tijdmachine, see [Gouda](#gouda))
 
 A non-commercial test. It grew out of Alex Barakov's
 [Amsterdam, building by building](https://github.com/alexbarakov/amsterdam-by-building) (MIT), itself inspired by
@@ -57,7 +58,29 @@ large and rebuilt by the pipeline.
 
 Copy a file in `cities/`, set `label`, `gemeentecode` (the four digits BAG ids start with), `origin` (RD New),
 `starts`, `home`, `periods` and `tier1`, and run the pipeline with its name. The register's name for the municipality
-is `label`, or `gemeentenaam` when it differs. See [CONTRIBUTING.md](CONTRIBUTING.md).
+is `label`, or `gemeentenaam` when it differs. When the city's Wikipedia article is not titled `label`, name it
+with `wikipedia` (`{"nl": ..., "en": ...}`). See [CONTRIBUTING.md](CONTRIBUTING.md).
+
+## Gouda
+
+[`cities/gouda.json`](cities/gouda.json) is configuration only, like the other cities. Its periods and main streets
+are a first draft, still to be checked by the Gouda Tijdmachine. Gouda is not on Cloudflare Pages: the pipeline runs
+on the Gouda Tijdmachine's server in a virtual environment, and Apache serves the built site through a symlink:
+
+```bash
+python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
+.venv/bin/python -m pipeline.run gouda
+.venv/bin/python scripts/build_site.py gouda     # dist/gouda/; the _headers file there is for Cloudflare only
+# once: ln -s <repo>/dist/gouda <www.goudatijdmachine.nl document root>/layrs
+```
+
+Roadmap:
+
+- [ ] Periods and `tier1` streets checked by the Gouda Tijdmachine
+- [ ] Roofs and spires: the first build (2026-10-22) could not reach data.3dbag.nl and fell back to the 3D
+  Basisvoorziening, so it has no LoD 2.2 roofs; rerun with `--from s00_fetch_3dbag` once 3D BAG answers again
+- [ ] A Gouda Tijdmachine layer: stories and photos per building from its own linked data (licence to check first)
+- [ ] Long cache headers for the `.bin` tiles on Apache
 
 ## Data decisions
 

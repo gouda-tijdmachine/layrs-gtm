@@ -1,0 +1,36 @@
+{
+  "label": "Gouda",
+  "gemeentecode": "0513",
+  "origin": [108511.0, 447256.0],
+  "starts": [
+    ["Town hall", "Stadhuis", 108511.0, 447256.0],
+    ["Sint-Janskerk", "Sint-Janskerk", 108599.0, 447120.0],
+    ["Gouda station", "Station Gouda", 108299.0, 447816.0]
+  ],
+  "home": {"x": 0, "z": 300, "azimuth": 200, "elevation": 40, "span": 3500},
+  "roofs_within": 1100,
+  "suspect_years": [],
+  "wikipedia": {"nl": "Gouda", "en": "Gouda, South Holland"},
+  "periods": [
+    ["p1", "Before 1500 Medieval town", "Vóór 1500 Middeleeuwse stad", 1000, 1499, "#4a1410"],
+    ["p2", "1500–1576", "1500–1576", 1500, 1576, "#8c1c13"],
+    ["p3", "1577–1672 Golden Age", "1577–1672 Gouden Eeuw", 1577, 1672, "#c0462b"],
+    ["p4", "1673–1854", "1673–1854", 1673, 1854, "#d97a2b"],
+    ["p5", "1855–1913 Railway and industry", "1855–1913 Spoorweg en industrie", 1855, 1913, "#e5b13a"],
+    ["p6", "1914–1940 Between the wars", "1914–1940 Interbellum", 1914, 1940, "#8e9f3c"],
+    ["p7", "1941–1964 Oosterwei, Plaswijck", "1941–1964 Oosterwei, Plaswijck", 1941, 1964, "#3f8f6b"],
+    ["p8", "1965–1984 Bloemendaal", "1965–1984 Bloemendaal", 1965, 1984, "#2c7391"],
+    ["p9", "1985–2004 Goverwelle", "1985–2004 Goverwelle", 1985, 2004, "#3a4f9a"],
+    ["p10", "2005–today Westergouwe", "2005–nu Westergouwe", 2005, 2100, "#6a3f8f"]
+  ],
+  "tier1": ["Markt", "Hoogstraat", "Kleiweg", "Lange Tiendeweg", "Korte Tiendeweg", "Zeugstraat", "Westhaven",
+            "Oosthaven", "Turfmarkt", "Lange Groenendaal", "Wijdstraat", "Achter de Kerk", "Kattensingel",
+            "Fluwelensingel", "Blekerssingel", "Nieuwehaven", "Spieringstraat", "Keizerstraat", "Hoge Gouwe",
+            "Lage Gouwe", "Burgemeester Jamessingel", "Graaf Florisweg", "Ronsseweg", "Bodegraafsestraatweg",
+            "Goudse Houtsingel", "Burgemeester van Reenensingel", "Karnemelksloot", "Krugerlaan",
+            "Achterwillenseweg", "Burgemeester Martenssingel", "Goverwellesingel"],
+  "steps": ["s00_fetch_boundary", "s00_fetch_3dbag", "s00_fetch_3dbv", "s00_fetch_water", "s00_fetch_addresses",
+            "s00_fetch_energy", "s00_fetch_rce", "s00_fetch_wikidata", "s01_load", "s02_attributes", "s01c_roofs",
+            "s01d_spires", "s05_layers", "s07_labels", "s10_commons", "s06_wiki", "s03_tiles", "s04_water", "s13_graph",
+            "s14_search", "s15_addresses", "s16_register"]
+}
