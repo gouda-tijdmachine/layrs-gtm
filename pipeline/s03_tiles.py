@@ -180,6 +180,8 @@ def main():
         city=CITY, label=LABEL, tileSize=TILE, origin=ORIGIN,
         # where the buildings came from: 3D BAG, or the 3D Basisvoorziening without roof shapes (s01_load)
         buildingSource="3dbag" if any(Path(f"{DATA}/raw/3dbag").glob("*.gpkg")) else "3dbv",
+        # the archaeology mode, for a city whose config runs s00_fetch_archeo and s17_archeo
+        archeology=(OUT / "archeo" / "areas.json").exists(),
         # where a walk can start, besides the walker's own location
         starts=[dict(en=en, nl=nl, x=round(x - ORIGIN[0], 1), z=round(-(y - ORIGIN[1]), 1)) for en, nl, x, y in
                 CFG["starts"]],

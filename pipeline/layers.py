@@ -98,7 +98,8 @@ def short(txt: str, limit: int = 200) -> str:
 
 
 def story(name: str, txt: str, url: str) -> dict:
-    """A note for the walks and the card: the place's name and a line from the register, in Dutch either way."""
+    """A note for the walks and the card: the place's name and a line from the register, in Dutch either way; its
+    source is the record the line comes from, in the RCE's Linked Data Voorziening (url)."""
     line = short(txt)
     return {"name": name, "name_nl": name, "story": line, "story_nl": line, "source": url}
 
@@ -147,7 +148,7 @@ def register():
         k = next((k for k, _, _, pat in FUNCTIONS if re.search(pat, f)), None)
         if not k:
             continue
-        url = f"https://monumentenregister.cultureelerfgoed.nl/monumenten/{m['nr']}"
+        url = m.get("cho") or f"https://monumentenregister.cultureelerfgoed.nl/monumenten/{m['nr']}"
         for p in m["panden"]:
             name = m.get("name") or addr.get(p) or f"Rijksmonument {m['nr']}"
             out[p] = (k, story(name, m.get("txt"), url)) if m.get("txt") else k
@@ -244,7 +245,7 @@ def complexes_layer():
         c = cx.get(m.get("complex"))
         if not c:
             continue
-        note = story(c["name"] or f"Complex {c['nr']}", c["txt"], c["url"])
+        note = story(c["name"] or f"Complex {c['nr']}", c["txt"], c["id"])
         for p in m["panden"]:
             out[p] = ("estate" if c["estate"] else "complex", note)
     return out
