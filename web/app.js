@@ -198,6 +198,7 @@ const tr = (o, k) => (LANG === 'nl' && o?.[k + '_nl']) || o?.[k];
 const fmtLocale = () => LANG === 'nl' ? 'nl-NL' : 'en';
 const periods = config.periods;
 for (const p of periods) if (p.label_nl) NL_UI[p.label] = p.label_nl;
+NL_UI['Protected townscapes'] = 'Beschermde gezichten';
 document.querySelector('.masthead h1').childNodes[1].textContent = config.label;
 // The about text, written from the city's own numbers and sources.
 {
@@ -281,6 +282,30 @@ const water = new THREE.Mesh(waterGeo, new THREE.MeshBasicMaterial({ color: WATE
 land.position.y = -0.05;
 water.position.y = -0.4;
 flat.add(land, water);
+
+// ---------- Protected townscapes ----------
+// The State's protected town and village views (pipeline/s04_water.py), on a toggle: a light wash on the ground and a
+// red border drawn over the buildings, so the line can be followed through the streets.
+const TOWNSCAPE = '#c8102e';
+const townscapes = new THREE.Group();
+townscapes.visible = false;
+scene.add(townscapes);
+const gzBtn = document.querySelector('.gz-toggle');
+if (layers.some(L => L.id === 'townscapes' && L.count)) {
+  Promise.all([loadPolygons(D + 'townscapes.bin'), loadPolygons(D + 'townscapes_edge.bin')]).then(([area, edge]) => {
+    const wash = new THREE.Mesh(area, new THREE.MeshBasicMaterial({ color: TOWNSCAPE, transparent: true, opacity: 0.08, depthWrite: false }));
+    const border = new THREE.Mesh(edge, new THREE.MeshBasicMaterial({ color: TOWNSCAPE, transparent: true, opacity: 0.85, depthTest: false }));
+    wash.position.y = 0.1;
+    border.position.y = 0.3;
+    border.renderOrder = 5;
+    townscapes.add(wash, border);
+    gzBtn.hidden = false;
+  }).catch(() => {});
+}
+gzBtn.onclick = () => {
+  townscapes.visible = !townscapes.visible;
+  gzBtn.setAttribute('aria-pressed', String(townscapes.visible));
+};
 
 // ---------- Street and canal names ----------
 // Flat on the ground, turned along the street (pipeline/s07_labels.py). Textures are drawn on first use.
@@ -1860,6 +1885,7 @@ const orbitTick = () => { controls.autoRotate = orbit && !flight; requestAnimati
 orbitTick();
 
 function applyStaticText() {
+  document.querySelector('.gz-toggle span').textContent = t('Protected townscapes');
   document.documentElement.lang = LANG;
   document.querySelector('.dek').textContent = t('Every building standing today, by age and historical context.');
   document.querySelector('.about-open').textContent = t('About');
