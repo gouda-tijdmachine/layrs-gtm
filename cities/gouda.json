@@ -1,5 +1,7 @@
 {
   "label": "Gouda",
+  "logo": {"src": "https://www.goudatijdmachine.nl/wp-content/gtm-logo/gtm-logo-2025.svg", "alt": "Gouda Tijdmachine",
+           "title": "Een LAYRS implementatie door de Gouda Tijdmachine"},
   "gemeentecode": "0513",
   "origin": [108511.0, 447256.0],
   "starts": [

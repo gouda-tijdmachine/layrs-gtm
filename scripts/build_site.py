@@ -16,6 +16,7 @@ import json
 import re
 import shutil
 import sys
+from html import escape
 from pathlib import Path
 
 VIEWER = ["app.js", "styles.css", "logo.js", "worker.js", "vendor", "graph.js", "graph.css"]
@@ -66,6 +67,14 @@ def main():
                   lambda m: f'{m.group(1)}{desc}"', html)
     html = html.replace('<meta property="og:title" content="LAYRS">', f'<meta property="og:title" content="LAYRS: {label}">')
     html = html.replace('<span class="layrs" aria-label="LAYRS">LAYRS</span> <i', f'<span class="layrs" aria-label="LAYRS">LAYRS</span>{label}<i')
+    logo = json.loads(Path(f"cities/{city}.json").read_text(encoding="utf-8")).get("logo")
+    if logo:
+        # a city's own logo (cities/<city>.json) in place of the LAYRS mark: 32 px, on the name's baseline; the
+        # masthead lets no pointer through, the logo does, for its title
+        lg = {k: escape(v) for k, v in logo.items()}
+        html = html.replace('<span class="layrs" aria-label="LAYRS">LAYRS</span>',
+                            f'<img src="{lg["src"]}" alt="{lg["alt"]}" title="{lg["title"]}" height="32" style="width: auto; '
+                            'vertical-align: baseline; margin-right: .18em; pointer-events: auto">', 1)
     (out / "index.html").write_text(html, encoding="utf-8")
     g = Path("web/graph.html").read_text(encoding="utf-8")
     g = g.replace('<html lang="en">', f'<html lang="en" data-city="{city}" data-dir="{data}">', 1)
