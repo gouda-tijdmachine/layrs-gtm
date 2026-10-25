@@ -100,7 +100,6 @@ const NL_UI = {
   'Wikidata records this building as the place where they died.': 'Volgens Wikidata overleed deze persoon hier.',
   'Period': 'Periode', 'Layers': 'Lagen', 'Floors': 'Verdiepingen', 'Energy': 'Energie',
   'buildings': 'gebouwen', 'Building the city': 'De stad wordt gebouwd',
-  'Drag to turn. Right-drag or Shift-drag to move. Scroll to zoom.': 'Sleep om te draaien. Rechts slepen of Shift-slepen om te verschuiven. Scroll om te zoomen.',
   'Show legend': 'Legenda tonen', 'Hide legend': 'Legenda verbergen', 'Legend': 'Legenda',
   'Built in': 'Gebouwd in', 'Click a period to see it alone. Paler buildings have an approximate year.': 'Klik op een periode om alleen die te zien. Lichtere gebouwen hebben een geschat bouwjaar.',
   'Storeys': 'Verdiepingen', 'Energy label': 'Energielabel',
@@ -225,6 +224,7 @@ document.querySelector('.masthead h1').childNodes[1].textContent = config.label;
   const [en, nl] = document.querySelectorAll('#about article');
   en.innerHTML = `<h2 id="about-title">About this map</h2>
     <p>All ${n.toLocaleString('en')} buildings of ${config.label}, coloured by the year they were built and set in the history that shaped them.</p>
+    <h3>Using the map</h3><p class="about-use">Drag to turn. Right-drag or Shift-drag to move. Scroll to zoom.</p>
     <p class="notice">A test, built with the open pipeline of <a href="https://github.com/alexbarakov/amsterdam-by-building" target="_blank" rel="noopener">Amsterdam, building by building</a> by Alex Barakov, inspired by Sasha Bogachev's <a href="https://paris.bogachev.fr" target="_blank" rel="noopener">Paris, building by building</a>.</p>
     <h3>Data</h3><ul>
     <li>Buildings, heights, years: ${bv ? 'Kadaster 3D Basisvoorziening 2025 (height statistics per building, without roof shapes)' : '3D BAG (TU Delft), with LoD 2.2 roofs in the centre and for listed buildings'}, on the building register BAG. CC BY 4.0.</li>
@@ -235,6 +235,7 @@ document.querySelector('.masthead h1').childNodes[1].textContent = config.label;
     <h3>Method</h3><p>Rounded years in BAG are spread across their rounding step; where the monument register dates a building earlier, the register wins. Approximate years are paler and marked “c.”.</p>`;
   nl.innerHTML = `<h2>Over deze kaart</h2>
     <p>Alle ${n.toLocaleString('nl-NL')} gebouwen van ${config.label}, gekleurd naar hun bouwjaar en geplaatst in de geschiedenis die ze vormde.</p>
+    <h3>Bediening</h3><p class="about-use">Sleep om te draaien. Rechts slepen of Shift-slepen om te verschuiven. Scroll om te zoomen.</p>
     <p class="notice">Een test, gebouwd met de open pijplijn van <a href="https://github.com/alexbarakov/amsterdam-by-building" target="_blank" rel="noopener">Amsterdam, building by building</a> van Alex Barakov, geïnspireerd door <a href="https://paris.bogachev.fr" target="_blank" rel="noopener">Paris, building by building</a> van Sasha Bogachev.</p>
     <h3>Gegevens</h3><ul>
     <li>Gebouwen, hoogtes, bouwjaren: ${bv ? '3D Basisvoorziening 2025 van het Kadaster (hoogtestatistieken per gebouw, zonder dakvormen)' : '3D BAG (TU Delft), met de daken uit LoD 2.2 in het centrum en voor monumenten'}, op basis van de BAG. CC BY 4.0.</li>
@@ -269,14 +270,14 @@ document.querySelector('.masthead h1').childNodes[1].textContent = config.label;
       <p>Een object dat meer dan drie perioden beslaat, telt als niet te dateren; een gebied zonder gedateerde vondsten
       staat er niet in.</p></section>`);
   }
-  // the city's own Wikipedia article (pipeline/s06_wiki.py), after the first lines
+  // the city's own Wikipedia article (pipeline/s06_wiki.py), after the first lines and how to use the map
   fetch(D + 'about.json').then(r => r.json()).then(a => {
     // its own escaping: this can run before the card code further down has defined esc()
     const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
     for (const [lang, el, more] of [['en', en, 'Read more on Wikipedia'], ['nl', nl, 'Lees verder op Wikipedia']]) {
       const w = a[lang] || a.nl || a.en;
       if (!w) continue;
-      el.querySelector('h2').nextElementSibling.insertAdjacentHTML('afterend', `<h3>${lang === 'nl' ? 'Over de stad' : 'About the city'}</h3>
+      el.querySelector('.about-use').insertAdjacentHTML('afterend', `<h3>${lang === 'nl' ? 'Over de stad' : 'About the city'}</h3>
         <p lang="${a[lang] ? lang : 'nl'}">${esc(w.extract)} <a href="${esc(w.url)}" target="_blank" rel="noopener">${more}</a></p>`);
     }
   }).catch(() => {});
@@ -2243,7 +2244,6 @@ function applyStaticText() {
   archBtn.querySelector('span').textContent = t(ARCH.on ? 'Built' : 'Archaeology');
   archBtn.title = t(ARCH.on ? 'Back to the city as built' : 'Turn the city over: what lies under the ground');
   document.querySelector('.tally-count').childNodes[1].textContent = ' ' + t(ARCH.on ? 'research areas' : 'buildings');
-  document.querySelector('.howto').textContent = t('Drag to turn. Right-drag or Shift-drag to move. Scroll to zoom.');
   const ld = document.getElementById('loading'); if (ld.firstChild) ld.firstChild.textContent = t('Building the city') + ' ';
   playBtn.setAttribute('aria-label', t(playing ? 'Pause' : "Play the city's growth"));
   document.querySelectorAll('.lang [data-lang]').forEach(b => b.setAttribute('aria-pressed', b.dataset.lang === LANG));

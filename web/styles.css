@@ -81,7 +81,7 @@ h1 { margin: 0; font-size: clamp(34px, 4.4vw, 56px); font-weight: 800; letter-sp
   background: linear-gradient(#c49a62 0 33%, #a8703a 33% 66%, #344a63 66%); }
 .arch-toggle[aria-pressed="true"] { background: var(--paper); color: var(--ink); }
 .arch-toggle[aria-pressed="true"] i { background: linear-gradient(90deg, #8c1c13 0 33%, #e5b13a 33% 66%, #3f8f6b 66%); }
-body.archeo .timeline, body.archeo .find, body.archeo .gz-toggle, body.archeo .howto,
+body.archeo .timeline, body.archeo .find, body.archeo .gz-toggle,
 body.archeo .modes button[data-mode], body.archeo .modes .walks-open, body.archeo .modes-sep { display: none !important; }
 body.archeo .masthead, body.archeo .tally { color: #f3eee6; }
 body.archeo .veil { display: none; }
@@ -201,10 +201,6 @@ body.archeo .veil { display: none; }
 .card .photo.inline img { border-radius: 0; }
 .card .hint { margin: 0; padding: 8px 16px 12px; color: var(--muted); font-size: 12px; border-top: 1px solid var(--rule); }
 
-/* How to move: a quiet line under the timeline's right end. */
-.howto { position: fixed; right: var(--gutter); bottom: calc(env(safe-area-inset-bottom, 0px) + 120px); color: var(--muted); background: rgba(228,232,234,.85); padding: 2px 8px; border-radius: 4px;
-  font-size: 12px; pointer-events: none; }
-@media (max-width: 720px), (hover: none) { .howto { display: none; } }
 
 .timeline { position: fixed; left: 0; right: 0; bottom: 0; display: flex; align-items: flex-end; gap: 14px;
   padding: 0 var(--gutter) calc(env(safe-area-inset-bottom, 0px) + 14px); pointer-events: none; }
@@ -522,7 +518,7 @@ body.archeo .veil { display: none; }
 }
 /* On a phone, while a walk is open, the timeline gives its room to the map. */
 @media (max-width: 720px) {
-  body.walking .timeline, body.walking .howto { display: none; }
+  body.walking .timeline { display: none; }
   body.walking .modes { bottom: calc(env(safe-area-inset-bottom, 0px) + 14px); }
   body.walking .panel { bottom: calc(env(safe-area-inset-bottom, 0px) + 64px); }
 }
