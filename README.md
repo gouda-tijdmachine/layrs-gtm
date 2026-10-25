@@ -81,8 +81,10 @@ python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
 Roadmap:
 
 - [ ] Periods and `tier1` streets checked by the Gouda Tijdmachine
-- [ ] Roofs and spires: the first build (2026-10-22) could not reach data.3dbag.nl and fell back to the 3D
-  Basisvoorziening, so it has no LoD 2.2 roofs; rerun with `--from s00_fetch_3dbag` once 3D BAG answers again
+- [x] Roofs and spires: the first build (2026-10-22) could not reach data.3dbag.nl and fell back to the 3D
+  Basisvoorziening. `s00_fetch_3dbag` now reads the release from 3D BAG's object storage, which only serves
+  CityJSON, and rewrites each tile into the GeoPackage layers the later steps read; rebuilt 2026-10-25 with LoD 2.2
+  roofs for all 36,367 buildings and towers or spires on 6
 - [ ] A Gouda Tijdmachine layer: stories and photos per building from its own linked data (licence to check first)
 - [ ] Long cache headers for the `.bin` tiles on Apache
 
