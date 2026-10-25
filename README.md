@@ -78,6 +78,12 @@ python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
 # once: ln -s <repo>/dist/gouda <www.goudatijdmachine.nl document root>/layrs
 ```
 
+Apache on that server marks every file but HTML and JSON `Cache-Control: immutable`, so a file that keeps its URL
+across builds stays stale in a browser (on 2026-10-25 new tile offsets met cached old packs and the viewer broke).
+`build_site.py` therefore gives every file a build can change a URL of its own: the data sits in
+`data/<city>-<hash>/`, which the pages name as `data-dir`, and the scripts and styles are linked with `?v=<hash>`.
+The vendored three.js modules keep plain URLs; after upgrading three.js, rename its folder.
+
 Roadmap:
 
 - [ ] Periods and `tier1` streets checked by the Gouda Tijdmachine
@@ -86,7 +92,8 @@ Roadmap:
   CityJSON, and rewrites each tile into the GeoPackage layers the later steps read; rebuilt 2026-10-25 with LoD 2.2
   roofs for all 36,367 buildings and towers or spires on 6
 - [ ] A Gouda Tijdmachine layer: stories and photos per building from its own linked data (licence to check first)
-- [ ] Long cache headers for the `.bin` tiles on Apache
+- [ ] Long cache headers on Apache: the hashed data folder and `?v=` files are safe to cache for a year, but Apache
+  sends only `immutable` without a `max-age`
 
 ## Data decisions
 

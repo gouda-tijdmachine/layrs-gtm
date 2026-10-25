@@ -21,7 +21,9 @@ const ENERGY_COLORS = ['#efeee9', '#c1272d', '#e4572e', '#f08a24', '#f6c445', '#
 // s03_tiles); its files are in data/<city>/ (pipeline/city.py).
 const CITY = new URLSearchParams(location.search).get('city') || document.documentElement.dataset.city
   || (await fetch('data/cities.json').then(r => r.json()))[0].city;
-const D = `data/${CITY}/`;
+// A built site keeps its data in a folder named after its content (scripts/build_site.py, data-dir), so a browser never
+// mixes cached files of two builds
+const D = `data/${(CITY === document.documentElement.dataset.city && document.documentElement.dataset.dir) || CITY}/`;
 const [config, layers, attrBuf] = await Promise.all([
   fetch(D + 'city.json').then(r => r.json()),
   fetch(D + 'layers.json').then(r => r.json()),
