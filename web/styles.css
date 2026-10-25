@@ -49,8 +49,8 @@ h1 { margin: 0; font-size: clamp(34px, 4.4vw, 56px); font-weight: 800; letter-sp
 .tally-count { color: var(--muted); }
 
 /* Context panel: legend, ramp or layer list, always on the left under the masthead. */
-.panel { position: fixed; left: var(--gutter); top: calc(env(safe-area-inset-top, 0px) + var(--gutter) + 120px);
-  width: min(340px, calc(100vw - 2 * var(--gutter))); max-height: calc(100vh - 300px); overflow-y: auto;
+.panel { position: fixed; left: var(--gutter); top: calc(env(safe-area-inset-top, 0px) + var(--gutter) + 72px);
+  width: min(340px, calc(100vw - 2 * var(--gutter))); max-height: calc(100vh - 252px); overflow-y: auto;
   background: var(--paper); border-radius: 10px; padding: 14px 16px; }
 .panel h2 { margin: 0 0 8px; font-size: 13px; font-weight: 700; }
 .panel h2.section { margin: 14px 0 4px; color: var(--muted); font-weight: 600; }
