@@ -9,7 +9,7 @@
     ["Sint-Janskerk", "Sint-Janskerk", 108599.0, 447120.0],
     ["Gouda station", "Station Gouda", 108299.0, 447816.0]
   ],
-  "home": {"x": 0, "z": 300, "azimuth": 200, "elevation": 40, "span": 3500},
+  "home": {"x": 0, "z": 300, "azimuth": 200, "elevation": 40, "span": 4200},
   "roofs_within": 1100,
   "suspect_years": [],
   "wikipedia": {"nl": "Gouda", "en": "Gouda, South Holland"},
