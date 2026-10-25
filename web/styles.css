@@ -63,7 +63,7 @@ h1 { margin: 0; font-size: clamp(34px, 4.4vw, 56px); font-weight: 800; letter-sp
   display: grid; place-items: center; cursor: pointer; color: var(--ink); }
 .jump button:hover { background: var(--sky); }
 .jump .icon { width: 18px; height: 18px; }
-/* Language: two letters under the year. */
+/* Language: two letters under the year (on a wide screen under the name, below). */
 .lang { position: fixed; right: var(--gutter); top: calc(env(safe-area-inset-top, 0px) + var(--gutter) + 92px); display: flex;
   background: var(--paper); border-radius: 999px; padding: 2px; }
 .lang button { border: 0; background: none; padding: 3px 9px; border-radius: 999px; cursor: pointer; font-size: 12px; font-weight: 600; color: var(--muted); }
@@ -78,6 +78,15 @@ h1 { margin: 0; font-size: clamp(34px, 4.4vw, 56px); font-weight: 800; letter-sp
   display: inline-flex; align-items: center; gap: 7px; border: 0; background: var(--paper); border-radius: 999px;
   padding: 5px 11px; cursor: pointer; font: inherit; font-size: 12px; font-weight: 600; color: var(--ink); }
 .arch-toggle[hidden] { display: none; }
+/* On a wide screen About and the languages stand on the left under the name, the legend under them, and the
+   switches on the right move up into their place under the year. */
+@media (min-width: 721px) {
+  .lang { right: auto; left: var(--gutter); top: calc(env(safe-area-inset-top, 0px) + var(--gutter) + 72px); }
+  .panel { top: calc(env(safe-area-inset-top, 0px) + var(--gutter) + 114px); max-height: calc(100vh - 294px); }
+  .gz-toggle { top: calc(env(safe-area-inset-top, 0px) + var(--gutter) + 92px); }
+  .arch-toggle { top: calc(env(safe-area-inset-top, 0px) + var(--gutter) + 126px); }
+  .sibling { top: calc(env(safe-area-inset-top, 0px) + var(--gutter) + 90px); }
+}
 .arch-toggle i { width: 12px; height: 12px; border-radius: 2px;
   background: linear-gradient(#c49a62 0 33%, #a8703a 33% 66%, #344a63 66%); }
 .arch-toggle[aria-pressed="true"] { background: var(--paper); color: var(--ink); }
