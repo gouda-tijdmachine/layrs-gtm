@@ -2237,7 +2237,7 @@ orbitTick();
 function applyStaticText() {
   document.querySelector('.gz-toggle span').textContent = t('Protected townscapes');
   document.documentElement.lang = LANG;
-  document.querySelector('.dek').textContent = t('Every building standing today, by age and historical context.');
+  document.querySelector('.masthead h1').title = t('Every building standing today, by age and historical context.');
   document.querySelector('.about-open').textContent = t('About');
   setTimeout(placeFind, 0);
   findInput.placeholder = t('Search'); findInput.setAttribute('aria-label', t('Search a building, address or street'));
