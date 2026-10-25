@@ -1751,6 +1751,8 @@ const panel = document.getElementById('panel-body');
 const sheetHandle = panelEl.querySelector('.sheet-handle');
 const phone = matchMedia('(max-width: 720px)');
 // On a phone the panel is a sheet: folded to one line until opened, and folded again when the city is the point.
+// On a wide screen it is open unless the reader folds it, which the browser remembers.
+const FOLD_KEY = 'legendFolded';
 function setCollapsed(c) {
   panelEl.classList.toggle('collapsed', c);
   sheetHandle.setAttribute('aria-expanded', String(!c));
@@ -1758,7 +1760,12 @@ function setCollapsed(c) {
   sheetHandle.setAttribute('aria-label', t(c ? 'Show legend' : 'Hide legend'));
 }
 let sheetSwiped = false;
-sheetHandle.onclick = () => { if (sheetSwiped) { sheetSwiped = false; return; } setCollapsed(!panelEl.classList.contains('collapsed')); };
+sheetHandle.onclick = () => {
+  if (sheetSwiped) { sheetSwiped = false; return; }
+  const c = !panelEl.classList.contains('collapsed');
+  setCollapsed(c);
+  if (!phone.matches) try { localStorage.setItem(FOLD_KEY, c ? '1' : '0'); } catch {}
+};
 // On a phone the open legend folds when the map is touched, or when its bar is swiped down.
 let sheetDown = null;
 sheetHandle.addEventListener('pointerdown', e => { sheetDown = e.clientY; });
@@ -1772,7 +1779,7 @@ document.getElementById('scene')?.addEventListener('pointerdown', () => {
 function collapsePanelOnPhone() { if (phone.matches) setCollapsed(true); }
 // On a phone, choosing Layers in the mode bar opens the list of layers.
 document.querySelector(`.modes button[data-mode="${MODE.layers}"]`)?.addEventListener('click', () => { if (phone.matches) setCollapsed(false); });
-setCollapsed(phone.matches);
+setCollapsed(phone.matches || (() => { try { return localStorage.getItem(FOLD_KEY) === '1'; } catch { return false; } })());
 const totals = periods.map(() => 0);
 for (const v of Object.values(config.histogram)) v.forEach((n, i) => totals[i] += n);
 const fmt = n => n.toLocaleString(fmtLocale());

@@ -594,6 +594,23 @@ body.archeo .veil { display: none; }
   .about article h2 { padding-right: 44px; }
 }
 
+/* The legend on a wide screen: open, a title bar with a fold arrow; folded, a "Legend" pill in its place (app.js
+   remembers the choice). */
+@media (min-width: 721px) {
+  .sheet-handle { display: block; width: calc(100% + 32px); margin: -14px -16px 10px; padding: 10px 16px; border: 0;
+    border-bottom: 1px solid var(--rule); background: none; text-align: left; font-size: 13px; font-weight: 700; cursor: pointer; }
+  .sheet-handle::after { content: ""; float: right; width: 7px; height: 7px; margin-top: 5px; border: solid var(--muted);
+    border-width: 0 2px 2px 0; transform: rotate(225deg); }
+  .sheet-handle:hover::after { border-color: var(--ink); }
+  .panel.collapsed { width: auto; padding: 0; overflow: hidden; border-radius: 999px; }
+  .panel.collapsed .sheet-handle { width: auto; margin: 0; padding: 8px 14px 8px 34px; border-bottom: 0; position: relative; }
+  .panel.collapsed .sheet-handle::before { content: ""; position: absolute; left: 14px; top: 50%; width: 12px; height: 9px;
+    transform: translateY(-50%); border-top: 2px solid var(--ink); border-bottom: 2px solid var(--ink);
+    background: linear-gradient(var(--ink), var(--ink)) center / 100% 2px no-repeat; }
+  .panel.collapsed .sheet-handle::after { content: none; }
+  .panel.collapsed #panel-body { display: none; }
+}
+
 /* The legend on a phone: folded, a small "Legend" pill over the mode bar; open, a sheet with a grab bar and a ×.
    A touch on the map or a swipe down on the bar folds it again (app.js). */
 @media (max-width: 720px) {
